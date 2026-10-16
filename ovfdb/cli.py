@@ -93,8 +93,8 @@ def mine(dynamics: str = "all", limit: int = 0, label: str = "naturalistic", spl
 
 
 @app.command()
-def run(manifest: str, provider: str, mode: str = "av", out: str = "", limit: int = 0, concurrency: int = 1,
-        model: str = ""):
+def run(manifest: str, provider: str = typer.Option(..., "--provider", help="gemini_live | human_gt | random"),
+        mode: str = "av", out: str = "", limit: int = 0, concurrency: int = 1, model: str = ""):
     """WS3: stream each clip through a provider; write runs/<out>/<clip>/agent.wav."""
     from ovfdb.harness import streamer  # WS3
     streamer.run_manifest(manifest, provider=provider, mode=mode, out=out or f"runs/{provider}_{mode}",
