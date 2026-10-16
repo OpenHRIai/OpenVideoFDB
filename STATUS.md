@@ -17,7 +17,7 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
 | WS4 scoring: ASR + timing | todo | — | — | |
 | WS5 judge + calibration | todo | — | — | needs WS4 |
 | WS6 providers: OpenAI RT, Tavus/Anam, gen judge | todo | — | — | needs WS3, WS5 |
-| WS7 NVIDIA adapter | todo | — | — | **request HF access first** (gated, manual approval) |
+| WS7 NVIDIA adapter | blocked (external) | — | 2026-10-15 | access requested 2026-10-15, awaiting approval; **not on the critical path** — all other WS run on Seamless |
 | WS8 report + publish | todo | — | — | last |
 
 ## Decisions log
@@ -28,4 +28,4 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
 
 ## Open questions
 - Which provider API keys are available? (fugubook `.env` has TAVUS/ANAM/OPENAI/GOOGLE per survey.)
-- NVIDIA access approved? (date requested: ____ )
+- NVIDIA access: requested 2026-10-15, pending. Non-blocking.
