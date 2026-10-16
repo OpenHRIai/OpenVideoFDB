@@ -1,0 +1,154 @@
+
+VideoFDB — Evaluating Full-Duplex Vision-Speech Capabilities in Conversational Agents
+VideoFDB —
+Evaluating Full-Duplex Vision-Speech
+Capabilities in Conversational Agents
+The first benchmark for full-duplex audio-visual-to-audio-visual conversation.
+ Amrita Mazumdar1,
+ Seonwook Park1,
+ Rajarshi Roy1,
+ Nikhil Srihari1,
+ Shengze Wang1,
+ Yuhao Zhou2,
+ Julia Wang2,
+ Koki Nagano1,
+ Shalini De Mello1
+1NVIDIA  ·  2David AI
+ Leaderboard
+ arXiv
+ Paper (PDF)
+ Dataset (Hugging Face)
+Abstract
+ Natural human conversation is full-duplex and audio-visual: people simultaneously speak, listen, and signal through gaze, gesture, and affect. VideoFDB is the first benchmark to evaluate full-duplex audio-visual-to-audio-visual conversational agents — and we find that today's vision-speech models systematically miss the nonverbal turn.
+ Existing full-duplex benchmarks evaluate speech alone, while audio-visual benchmarks evaluate split-role or turn-based interaction. Neither captures the continuous, overlapping co-construction of meaning that defines natural dyadic conversation. VideoFDB closes that gap with 237 dyadic clips from real video calls spanning 11 nonverbal conversational dynamics, a taxonomy separating perception from generation, and a rubric-based LM-as-judge framework that scores agents along interpretable axes.
+ Evaluating leading open- and closed-source vision-speech agents, we find two systematic failure modes: captioning collapse (the model describes the user's appearance rather than conversing with them) and visual-stream ignorance (the audio-only and audio-visual outputs are paraphrases of each other). Cascaded speech-to-avatar pipelines preserve turn-yielding discipline but cannot insert nonverbal cues during the user's turn, with latencies 2.8–3.5 seconds behind human ground truth.
+ To protect participant identity, we do not visualize clip samples on this page. The full evaluation dataset is available on Hugging Face.
+Leaderboard
+ Best and second-best non-human entries are in bold and underlined. Timing reports TOR-Alignment percentage above median latency below. Full per-dynamic breakdowns are in the paper appendix.
+ Perception
+ Generation
+ | 
+ | Model
+ | Fluency ↑
+ | Conv. Flow ↑
+ | Vis. Ground. ↑
+ | Overall ↑
+ | Timing ↑
+ | Human reference | 4.16 | 4.20 | 4.24 | 4.20 | 90% / 1400 ms
+ | Closed-Source Full-Duplex AV2AV models
+ | Tavus Griffin Lite | 3.60 | 3.67 | 3.92 | 3.73 | 73.8% / 2232 ms
+ | Closed-source full-duplex speech-vision (AV2A)
+ | Gemini 2.5 Flash Native | 3.33 | 2.81 | 3.37 | 3.17 | 72% / 3160 ms
+ | Gemini 3.1 Flash Live | 3.15 | 2.20 | 3.16 | 2.84 | 66% / 1720 ms
+ | OpenAI gpt-realtime-mini | 2.91 | 2.37 | 2.90 | 2.73 | 66% / 5320 ms
+ | OpenAI gpt-realtime | 2.72 | 2.50 | 3.02 | 2.75 | 72% / 5400 ms
+ | Open-source full-duplex speech-vision (AV2A)
+ | MiniCPM-o 4.5 | 3.03 | 3.54 | 3.63 | 3.40 | 73% / 720 ms
+ | MiniOmni2 | 0.65 | 1.37 | 1.54 | 1.19 | 64% / 3080 ms
+ | VITA-1.5 | 1.19 | 1.57 | 2.53 | 1.76 | 58% / 400 ms
+ | Audio-only baselines (A2A; same agents, video withheld)
+ | Gemini 2.5 Flash Native | 3.35 | 2.98 | 3.17 | 3.17 | 73% / 2760 ms
+ | Gemini 3.1 Flash Live | 3.40 | 2.64 | 3.03 | 3.03 | 69% / 1240 ms
+ | OpenAI gpt-realtime-mini | 3.05 | 2.48 | 3.12 | 2.88 | 69% / 5000 ms
+ | OpenAI gpt-realtime | 2.93 | 2.37 | 3.59 | 2.97 | 67% / 4440 ms
+ | MiniCPM-o 4.5 | 3.45 | 3.76 | 3.10 | 3.44 | 72% / 920 ms
+ | MiniOmni2 | 1.48 | 1.70 | 2.15 | 1.72 | 69% / 2760 ms
+ | VITA-1.5 | 1.62 | 1.37 | 3.02 | 2.00 | 61% / 800 ms
+ Table 1. Performance breakdown across Perception rubrics. AV2A and A2A runs are paired on the same clips to isolate the visual contribution.
+ | 
+ | Model
+ | Fluency ↑
+ | Dyadic Affect ↑
+ | NV Cue Approp. ↑
+ | Overall ↑
+ | Timing ↑
+ | Human ground truth | 4.42 | 4.14 | 3.18 | 3.92 | 78% / 900 ms
+ | Full-Duplex AV2AV models
+ | Tavus Griffin Lite | 4.25 | 4.40 | 2.83 | 3.83 | 62.8% / 1892 ms
+ | Cascaded speech-to-avatar (A2AV)
+ | Gemini 2.5 + Anam | 3.48 | 3.21 | 1.71 | 2.80 | 44% / 2840 ms
+ | Gemini 2.5 + Keyframe | 3.43 | 2.60 | 1.13 | 2.39 | 31% / 3520 ms
+ Table 2. Performance breakdown across Generation rubrics. Cascade architecture caps nonverbal-cue production well below human ground truth.
+Submit your model's results on VideoFDB.
+ Contact us at amritam@nvidia.com with your model's per-sample outputs and we'll score them and produce a leaderboard row. We'll soon release an automated evaluation pipeline to make submission easier and more accessible.
+ Get the evaluation dataset
+Contributions
+ A benchmark grounded in human communication science.
+ 237 expert-annotated dyadic clips from natural video calls, spanning 11 conversational dynamics drawn from established interpersonal-communication research — turn-taking, backchannels, gaze aversion, adaptors, affect displays, and more.
+ A perception/generation taxonomy with interpretable rubrics.
+ Perception axes score whether the agent reads the situation; generation axes score whether the agent's own audio-visual output coheres. Three rubric axes per category, each scored 0–5 by an LM judge with stable cross-judge agreement (77–89% within 1 point).
+ Next steps for research:
+ We identify captioning collapse, visual-stream ignorance, and the lack of full-duplex avatar pipelines as key opportunities for future work in Interactive Agentic AI.
+Motivation
+ Consider a brief pause in the middle of a sentence (Figure 1). An audio-only agent may treat it as a turn handoff and start speaking. But with both audio and video together, the same moment has more context: a shifted gaze and raised head can signal the user is still thinking, so the right response is to wait.
+ Figure 1. VideoFDB curates evaluation samples from natural two-person video calls and evaluates perception and generation across 11 dynamic categories.
+ What an agent does while the user is still speaking matters as much as what it says next and when. Most evaluations split dialogue into turns and focus on the response latency or audio quality, but real conversations are continuous, with bidirectional verbal and nonverbal cues. Full-duplex speech benchmarks measure performance from audio alone and would interrupt the user's pause. Video QA benchmarks reward identifying gaze direction, but not using it to guide turn-taking. VideoFDB evaluates the intersection between these two approaches: whether agents continuously use visual signals during two-way conversation.
+Taxonomy
+ We organize the benchmark around the four nonverbal channels human-communication research identifies as central to dyadic interaction — dialogue, eye gaze, face, and body — and select dynamics that directly govern conversational floor management, listener feedback, social-affective signaling, and conversational body movement.
+Perception
+ Gaze Avoidance with Pause
+ D · G
+ Pause Handling
+ D · G
+ Adaptor Handling
+ B
+ Nonverbal Interruption
+ D · B
+ Face Emotion Display
+ G · F
+ Nonverbal Backchanneling
+ D · F
+ Laughter
+ D · F
+Generation
+ Face Emotion Display
+ G · F
+ Nonverbal Backchanneling
+ D · F
+ Laughter
+ D · F
+ Verbal Interruption
+ D
+ Verbal Backchanneling
+ D · F
+ Turn-taking
+ D
+ Emotion Matching
+ F
+ D Dialogue
+ G Eye Gaze
+ F Face
+ B Body
+ Each clip is centered on a human-annotated dynamic event window [t_start, t_end], with 1–3 lead-in turns and up to one follow-up turn preserved as context. Clips are mined from a held-out corpus of two-person video calls and validated through a three-pass annotation pipeline (candidate discovery → timestamp/type validation → final quality review).
+ Figure 2. Evaluation flow. We stream user audio/video to the agent, then score the recorded response on category-specific rubric axes.
+Findings
+ Insight 1
+Current models remain well below human conversational naturalness.
+ No evaluated agent approaches the human reference on VideoFDB. The largest deficits concentrate in fast social-coordination dynamics — Pause Handling, Nonverbal Backchanneling, Gaze Avoidance with Pause — with aggregate human–model gaps up to 0.85 on the 0–5 scale. Conversational Flow shows the widest gap: humans 4.20, closed-source AV2A 2.20–2.81, best AV2A (MiniCPM-o 4.5) 3.54. On timing, humans hit 90% TOR-Alignment at 1.4 s median latency; the next-best model lands at 73% / 720 ms.
+ Insight 2
+Visual frame rate prevents capture of nonverbal signals.
+ Audio is processed at millisecond resolution, but AV2A models typically take video at 1 FPS — missing nonverbal dynamics that unfold within 1–2 seconds. Nonverbal Interruption requires yielding within 1.5 s, yet Gemini 3.1 lands 1.7 s late and Gemini 2.5 worse. Pushing MiniCPM-o-4.5's user-controllable FPS higher (the only model exposing this knob) degrades performance past 2 FPS, with fluency falling from 3.55 to 2.33 as the cross-modal attention budget overloads.
+ Insight 3
+No system uses the visual channel for both timing and content.
+ Comparing audio-only and audio-visual runs of the same agents, AV2A scores worse than A2A on perception rubrics in every model family we tested. We observe two dominant failure modes:
+ Figure 3. When given AV input, Mini-Omni2 captions the user 87% of the time; VITA-1.5 issues capability disclaimers and doubles tokens on most clips.
+Captioning collapse
+The agent treats visual input as a captioning prompt: "I can see you're…", "you look…". Mini-Omni2 does this on 87% of AV clips but reverts to dialogue in audio-only mode. Even gpt-realtime shows a milder version of the pattern.
+Visual-stream ignorance
+gpt-realtime-mini produces AV2A and A2A outputs that are near-paraphrases of each other — the visual stream rarely shifts response timing or content. The model is consuming the bytes but not using them.
+ Insight 4
+Cascaded speech-to-avatar pipelines structurally cannot supply real-time nonverbal cues.
+ We evaluate Gemini 2.5 Flash Native driving two avatar generation methods. Relative to human ground truth, cascaded avatars show only a modest Fluency drop (4.42 → 3.43–3.48) but a large drop in Nonverbal Cue Appropriateness (3.18 → 1.13–1.71). The reason is architectural: audio-driven avatars are effectively turn-based: motion follows produced speech only, so they cannot add nonverbal cues during the user's turn. Cascade latency (2.8–3.5 s) is far above the threshold for interactive nonverbal timing. Cascaded A2AV remains fundamentally limited; closing the gap requires end-to-end speech-vision models or avatar layers that emit nonverbal motion independently of speech.
+Cite
+ Copy citation
+@misc{mazumdar2026videofdb,
+ title = {VideoFDB: Evaluating Full-Duplex Vision-Speech Capabilities in Conversational Agents},
+ author = {Mazumdar, Amrita and Park, Seonwook and Roy, Rajarshi and Srihari, Nikhil and Wang, Shengze and Zhou, Yuhao and Wang, Julia and Nagano, Koki and De Mello, Shalini},
+ year = {2026},
+ eprint = {2605.30256},
+ archivePrefix = {arXiv},
+ primaryClass = {cs.CV},
+ url = {https://arxiv.org/abs/2605.30256}
+}
+VideoFDB · NVIDIA & David AI · 2026
+Questions: amritam@nvidia.com

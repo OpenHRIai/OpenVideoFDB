@@ -1,0 +1,32 @@
+# data & runs never go in git
+data/
+runs/
+*.mp4
+*.wav
+*.webm
+*.y4m
+*.parquet
+*.npy
+*.npz
+*.tar
+
+# secrets
+.env
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# os / editors
+.DS_Store
+.idea/
+.vscode/
+
+# keep placeholders
+!**/.gitkeep
