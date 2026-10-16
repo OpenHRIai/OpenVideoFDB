@@ -154,6 +154,27 @@ class _Handler(BaseHTTPRequestHandler):
     rows: ClassVar[list[dict]] = []
     review_file: ClassVar[Path] = Path("review.jsonl")
     roots: ClassVar[list[Path]] = []
+    manifest: ClassVar[Path] = Path("manifest.jsonl")
+    manifest_mtime: ClassVar[float] = 0.0
+    _lock: ClassVar[threading.Lock] = threading.Lock()
+
+    @classmethod
+    def refresh(cls) -> None:
+        """Re-read the manifest when it changed on disk (mining appends rows while you review)."""
+        try:
+            mtime = cls.manifest.stat().st_mtime
+        except OSError:
+            return
+        with cls._lock:
+            if mtime == cls.manifest_mtime:
+                return
+            known = {(r["clip_id"], r["bucket"]): r for r in cls.rows}
+            fresh = []
+            for r in build_rows(cls.manifest):
+                fresh.append(known.get((r["clip_id"], r["bucket"]), r))   # keep already-built rows (partner words)
+            cls.rows = fresh
+            cls.roots = sorted({Path(r["video"][len("/media/"):]).resolve().parent.parent for r in fresh}) or cls.roots
+            cls.manifest_mtime = mtime
 
     def log_message(self, fmt, *args):  # quiet
         pass
@@ -176,6 +197,7 @@ class _Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif u.path == "/api/rows":
+            self.refresh()
             dec = load_decisions(self.review_file)
             for r in self.rows:
                 r["decision"] = dec.get((r["clip_id"], r["bucket"]))
@@ -243,14 +265,13 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 def serve(manifest: str | Path, port: int = 8765, review: str | Path | None = None, open_browser: bool = True) -> None:
-    rows = build_rows(manifest)
+    _Handler.manifest = Path(manifest)
+    _Handler.refresh()
+    rows = _Handler.rows
     if not rows:
         raise SystemExit(f"no rows in {manifest}")
-    roots = sorted({Path(r["video"][len("/media/"):]).resolve().parent.parent for r in rows})
     handler = partial(_Handler)
-    _Handler.rows = rows
     _Handler.review_file = Path(review) if review else review_path(manifest)
-    _Handler.roots = roots
     httpd = None
     for p in range(port, port + 20):              # the requested port may be busy: take the next free one
         try:
