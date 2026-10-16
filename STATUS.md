@@ -45,7 +45,7 @@ dataset (WS7 adapter → runs → scoring). The Seamless-derived track is **park
 - README rewritten with results; LICENSE (MIT code / CC BY-NC manifests); `ovfdb rebuild` re-cuts clips from a
   manifest; `hf/README.md` dataset card + `scripts/publish_hf.py`; announcement drafts in `docs/announcement.md`.
 - Publish targets: GitHub `OpenHRIai/OpenVideoFDB` (user is org admin; tag `v0.1.0`), HF dataset
-  `OpenHRIai/open-videofdb` (manifests only; needs an HF org the token can write to), LinkedIn + X posts.
+  `OpenHRI/open-videofdb` (manifests only; needs an HF org the token can write to), LinkedIn + X posts.
 - NVIDIA progress: adapter done; validation smoke test + human reference on the 60 test rows with a partner
   channel match the paper (`results/nvidia_*.md`); random baseline on test running; **model runs on the 226
   test rows not started** (≈1.5 h, ≈$25 API + $3 judge) — first thing after the release.

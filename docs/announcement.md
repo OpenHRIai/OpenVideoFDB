@@ -30,7 +30,7 @@ the video channel on these dynamics (audio-only scores as well or better), and n
 produce a verbal "mhm" while you're still talking.
 
 Code (MIT): github.com/OpenHRIai/OpenVideoFDB
-Open clip manifests (CC BY-NC): huggingface.co/datasets/OpenHRIai/open-videofdb
+Open clip manifests (CC BY-NC): huggingface.co/datasets/OpenHRI/open-videofdb
 Paper: arxiv.org/abs/2605.30256
 
 Full NVIDIA test-split model runs and the video-out (generation) judge are next. Issues and

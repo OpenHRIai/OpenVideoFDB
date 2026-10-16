@@ -1,6 +1,6 @@
 """Publish the Seamless-derived manifests + dataset card to a Hugging Face dataset repo (WS8).
 
-    uv run python scripts/publish_hf.py --repo OpenHRIai/open-videofdb [--private] [--dry-run]
+    uv run python scripts/publish_hf.py --repo OpenHRI/open-videofdb [--private] [--dry-run]
 
 Uploads: manifest/ovfdb_v0.jsonl, manifest/ovfdb_v1.jsonl, manifest/ovfdb_v1_reviewed.jsonl,
 manifest/reviews/ovfdb_v1.jsonl and hf/README.md (the card). Never anything under data/,
@@ -24,7 +24,7 @@ FILES = [
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--repo", required=True, help="e.g. OpenHRIai/open-videofdb")
+    ap.add_argument("--repo", required=True, help="e.g. OpenHRI/open-videofdb")
     ap.add_argument("--private", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
