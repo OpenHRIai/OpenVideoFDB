@@ -238,6 +238,22 @@ def sample_from_dict(d: dict) -> Sample:
     return Sample(**d)
 
 
+def run_dir_names(samples: Iterable[Sample]) -> dict[tuple[str, str], str]:
+    """Run-directory name per manifest row, keyed by (clip_id, bucket).
+
+    Rows that share a clip_id normally share one run dir (same user channel streamed once;
+    the two buckets are scored from the same agent audio). NVIDIA's dual-bucket clips swap
+    user and partner between buckets, so when the rows of one clip_id differ in
+    `user_audio_path` each gets its own dir, `<clip_id>__<bucket>`.
+    """
+    by_clip: dict[str, set[str]] = {}
+    rows = list(samples)
+    for s in rows:
+        by_clip.setdefault(s.clip_id, set()).add(s.user_audio_path)
+    return {(s.clip_id, s.bucket.value): (f"{s.clip_id}__{s.bucket.value}" if len(by_clip[s.clip_id]) > 1 else s.clip_id)
+            for s in rows}
+
+
 def write_manifest(samples: Iterable[Sample], path: str | Path) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)

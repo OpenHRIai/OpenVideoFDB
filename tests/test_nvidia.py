@@ -46,3 +46,21 @@ def test_load_validation_split():
     # the user is speaker1 or speaker2 per row; the other channel ships for only some validation clips
     with_partner = [r for r in rows if r.partner_audio_path]
     assert with_partner and all(Path(r.partner_audio_path).exists() for r in with_partner)
+
+
+def _sample(cid, bucket=Bucket.PERCEPTION):
+    from ovfdb.schema import DynamicType, Sample
+    return Sample(clip_id=cid, conversation_id="x", bucket=bucket, dynamic_type=DynamicType.LAUGHTER, dynamic_start_s=1.0,
+                  dynamic_end_s=2.0, duration_s=10.0, user_audio_path=f"data/clips_t/{cid}/speaker1.wav",
+                  user_video_path=f"data/clips_t/{cid}/speaker1.mp4")
+
+
+def test_run_dir_names_split_dual_bucket_clips_that_swap_the_user():
+    from ovfdb.schema import run_dir_names
+    a_p = _sample("a"); a_g = _sample("a", Bucket.GENERATION)                 # same user channel: shared dir
+    b_p = _sample("b"); b_g = _sample("b", Bucket.GENERATION)
+    b_g.user_audio_path = "data/clips_t/b/speaker2.wav"                      # NVIDIA-style swap: own dirs
+    names = run_dir_names([a_p, a_g, b_p, b_g, _sample("c")])
+    assert names[("a", "perception")] == names[("a", "generation")] == "a"
+    assert names[("b", "perception")] == "b__perception" and names[("b", "generation")] == "b__generation"
+    assert names[("c", "perception")] == "c"

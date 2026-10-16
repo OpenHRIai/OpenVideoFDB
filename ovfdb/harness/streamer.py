@@ -37,7 +37,7 @@ from ovfdb.harness.base import (
     Mode,
 )
 from ovfdb.harness.recorder import Recorder, resample_pcm16
-from ovfdb.schema import AgentRun, Sample, _to_jsonable, read_manifest
+from ovfdb.schema import AgentRun, Sample, _to_jsonable, read_manifest, run_dir_names
 
 log = logging.getLogger(__name__)
 
@@ -288,15 +288,16 @@ def run_manifest(manifest: str | Path, provider: str, mode: str = "av", out: str
     out_dir = Path(out or f"runs/{provider}_{mode}")
     out_dir.mkdir(parents=True, exist_ok=True)
     factory = PROVIDERS[provider]
+    dir_names = run_dir_names(samples)          # <clip_id>, or <clip_id>__<bucket> when buckets swap the user
 
     async def main() -> list[AgentRun]:
         sem = asyncio.Semaphore(max(1, concurrency))
         results: list[AgentRun] = []
 
         async def one(s: Sample) -> None:
-            clip_dir = out_dir / s.clip_id
+            clip_dir = out_dir / dir_names[(s.clip_id, s.bucket.value)]
             if (clip_dir / "run.json").exists():
-                log.info("skip %s (run.json exists)", s.clip_id)
+                log.info("skip %s (run.json exists)", clip_dir.name)
                 return
             async with sem:
                 agent = factory(s, samples, model)

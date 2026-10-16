@@ -27,7 +27,7 @@ from functools import lru_cache
 from pathlib import Path
 from statistics import mean, stdev
 
-from ovfdb.schema import AgentRole, AgentRun, Axis, Bucket, Sample, TimingClass, read_manifest
+from ovfdb.schema import AgentRole, AgentRun, Axis, Bucket, Sample, TimingClass, read_manifest, run_dir_names
 from ovfdb.score import asr, vad
 from ovfdb.score import judge as judge_mod
 from ovfdb.score.segments import format_partition, merge_vad_and_words, partition, words_to_segments
@@ -162,14 +162,17 @@ def iter_rows(run_dir: Path, manifest: str) -> tuple[list[tuple[Sample, Path, Ag
     rows: list[tuple[Sample, Path, AgentRun]] = []
     seen: set[str] = set()
     runs: dict[str, AgentRun] = {}
-    for sample in _samples(manifest):
-        clip_dir = run_dir / sample.clip_id
+    samples = _samples(manifest)
+    dir_names = run_dir_names(samples)      # <clip_id>, or <clip_id>__<bucket> when buckets swap the user
+    for sample in samples:
+        name = dir_names[(sample.clip_id, sample.bucket.value)]
+        clip_dir = run_dir / name
         if not (clip_dir / "run.json").exists():
             continue
-        if sample.clip_id not in runs:
-            runs[sample.clip_id] = _load_run(clip_dir / "run.json")
-        rows.append((sample, clip_dir, runs[sample.clip_id]))
-        seen.add(sample.clip_id)
+        if name not in runs:
+            runs[name] = _load_run(clip_dir / "run.json")
+        rows.append((sample, clip_dir, runs[name]))
+        seen.add(name)
     skipped = [{"clip_id": d.name, "bucket": None, "reason": f"clip not in manifest {manifest}"}
                for d in iter_clip_dirs(run_dir) if d.name not in seen]
     return rows, skipped

@@ -6,6 +6,10 @@ Keep entries terse. Dates are absolute (YYYY-MM-DD).
 ## Contract changes
 _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other sessions rebase._
 - 2026-10-15 — initial schema (WS0).
+- 2026-10-16 — `schema.py`: added `run_dir_names(samples)` — run dir = `<clip_id>`, or `<clip_id>__<bucket>` when
+  the rows of one clip_id differ in `user_audio_path` (NVIDIA dual-bucket clips swap user/partner between buckets;
+  the shared-dir layout silently fed the wrong channel). Used by `harness/streamer.run_manifest` and
+  `score/pipeline.iter_rows`; `report` is unaffected (it reads clip_id from timing.json).
 - 2026-10-15 — `harness/base.py`: `AudioOut` gained `flush: bool = False` (barge-in: drop queued-unplayed audio at `t_received`; maps Gemini `server_content.interrupted`). Providers stamp `t_received` on their own clock (t=0 at first `push_audio`); streamer re-stamps on drain, keeps provider value as `t_agent` in events. (WS3)
 
 ## HANDOFF 2026-10-16 (session 2, evening) — read this first
