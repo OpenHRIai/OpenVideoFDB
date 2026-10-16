@@ -122,6 +122,30 @@ def score(run_dir: str, judge: str = "gpt-4o", axes: str = "all", manifest: str 
 
 
 @app.command()
+def review(manifest: str = "manifest/ovfdb_v1.jsonl", port: int = 8765, review_file: str = "",
+           no_browser: bool = False):
+    """Human annotator page: play each clip with its window, accept / reject / fix the window.
+
+    Decisions go to data/mining/review_<manifest stem>.jsonl; fold them in with `review-apply`.
+    """
+    from ovfdb.review import app as R
+    R.serve(manifest, port=port, review=review_file or None, open_browser=not no_browser)
+
+
+@app.command("review-apply")
+def review_apply(manifest: str = "manifest/ovfdb_v1.jsonl", review_file: str = "", out: str = "",
+                 drop_unreviewed: bool = False):
+    """Write <out> (default <manifest stem>_reviewed.jsonl): rejected rows dropped, fixed windows applied."""
+    from pathlib import Path
+
+    from ovfdb.review import app as R
+    rv = review_file or str(R.review_path(manifest))
+    dst = out or str(Path(manifest).with_name(Path(manifest).stem + "_reviewed.jsonl"))
+    kept, dropped, fixed = R.apply_decisions(manifest, rv, dst, keep_unreviewed=not drop_unreviewed)
+    print(f"{dst}: kept {kept}, dropped {dropped}, windows fixed {fixed} (decisions from {rv})")
+
+
+@app.command()
 def report(run_dirs: list[str], per_dynamic: bool = False, out: str = "results/summary.md",
            manifest: str = "", rows: int = 0):
     """WS5/WS8: Table-1 style summary with bootstrap CIs.
