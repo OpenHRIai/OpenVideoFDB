@@ -172,3 +172,19 @@ def test_paper_notation_names_and_settings():
     assert report.setting("anam", "a2a") == "A2AV"
     assert report.setting_group("human_gt", "av") == "REF" and report.setting_group("random", "av") == "RANDOM"
     assert report.setting_group("openai_realtime", "a2a") == "A2A"
+
+
+def test_row_filter_matches_per_bucket_run_dirs(tmp_path):
+    # NVIDIA-style dual-bucket clip: run dirs <clip>__perception / <clip>__generation, clip_id stored inside
+    run = tmp_path / "r"
+    _clip(run, "x__perception", "Laughter", {"fluency": 4, "semantic_grounding": 4})
+    _clip(run, "x__generation", "Laughter", None, passed=True, latency=100.0, bucket="generation")
+    for sub in ("x__perception/perception", "x__generation/generation"):
+        for f in ("timing.json", "judge.json"):
+            p = run / sub / f
+            if p.exists():
+                d = json.loads(p.read_text()); d["clip_id"] = "x"; p.write_text(json.dumps(d))
+    manifest = tmp_path / "m.jsonl"
+    manifest.write_text(json.dumps({"clip_id": "x", "bucket": "perception"}) + "\n" + json.dumps({"clip_id": "x", "bucket": "generation"}) + "\n")
+    df = report.summarise([run], keep=report.row_filter(manifest))
+    assert list(df["n"]) == [2] and df.iloc[0]["Fluency_n"] == 1 and df.iloc[0]["TOR-Align %_n"] == 1

@@ -152,13 +152,14 @@ def load_run(run_dir: str | Path, judge: str | None = None,
     provider = mode = judge_name = model = None
     clips: list[dict] = []
     for d, bucket, rd in iter_row_dirs(run_dir):
-        if keep is not None and (d.name, bucket) not in keep:
-            continue
         j = _read_json(rd / "judge.json")
         t = _read_json(rd / "timing.json")
         if j is None and t is None:
             continue
         src = t or j or {}
+        # run dirs are <clip_id> or <clip_id>__<bucket> (schema.run_dir_names): filter on the stored clip_id
+        if keep is not None and (src.get("clip_id", d.name.split("__")[0]), bucket) not in keep:
+            continue
         provider = provider or src.get("provider")
         mode = mode or src.get("mode")
         if model is None:
