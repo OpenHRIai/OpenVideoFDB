@@ -30,6 +30,14 @@
   `user_transcript_chunks` (JSON list of `{text, timestamp}` word-level ASR).
 - Multiple rows can share a `sample_id` (same clip in both buckets): 237 rows,
   180 distinct clips.
+- **Licence compliance (NVIDIA Evaluation License, `data/nvidia/LICENSE.md`):** evaluation/benchmarking use
+  only; publishing *results* is expressly allowed (§1); no redistribution of the data or derivative works
+  (§2c) except a minimal illustrative portion inside an academic publication (§5); no identification /
+  likeness / sensitive-attribute uses (§2e); no transfer to CN/RU/BY (§13); delete on request (§4). For this
+  repo that means: adapter code only; `manifest/nvidia_*.jsonl`, `data/`, and `runs_nv/` (judge payloads and
+  timing files embed NVIDIA transcripts and captions, i.e. derivative works) stay local and git-ignored and
+  are never attached to issues or releases. The licence says nothing about reimplementing the protocol,
+  which comes from the CC BY 4.0 paper.
 - Official scoring: not released. Email amritam@nvidia.com with per-sample
   outputs; an HF Space and a judge model are "coming".
 - Full card: `docs/reference/nvidia_dataset_card.md`. Leaderboard incl. the
