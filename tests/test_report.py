@@ -133,3 +133,22 @@ def test_load_run_selects_judge(runs):
         ("a", "perception"), ("b", "perception"), ("c", "perception"), ("c", "generation"), ("d", "perception")]
     with pytest.raises(FileNotFoundError):
         report.load_run(gt / "missing")
+
+
+def test_row_filter_restricts_runs_to_common_rows(runs, tmp_path):
+    gt, rnd = runs
+    manifest = tmp_path / "m.jsonl"
+    manifest.write_text("\n".join(json.dumps(r) for r in [
+        {"clip_id": "a", "bucket": "perception"}, {"clip_id": "c", "bucket": "generation"},
+        {"clip_id": "b", "bucket": "perception"}, {"clip_id": "zzz", "bucket": "perception"}]) + "\n")
+    keep = report.row_filter(manifest)
+    assert keep == {("a", "perception"), ("c", "generation"), ("b", "perception"), ("zzz", "perception")}
+    assert report.row_filter(manifest, rows=2) == {("a", "perception"), ("c", "generation")}
+    assert report.row_filter(None) is None and report.row_filter("") is None
+    df = report.summarise([gt, rnd], keep=keep)
+    assert list(df["n"]) == [3, 2]                                   # gt: a, b, c/generation; random: a, b
+    assert df.iloc[0]["Fluency_n"] == 2 and df.iloc[0]["Grounding_n"] == 0
+    out = report.write([gt, rnd], per_dynamic=True, out=tmp_path / "s.md", manifest=manifest, rows=2)
+    text = out.read_text()
+    assert f"Rows restricted to the first 2 rows of {manifest}." in text
+    assert "Laughter" not in text.split("## Per dynamic")[1]

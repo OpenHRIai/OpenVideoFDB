@@ -69,11 +69,31 @@ def iter_row_dirs(run_dir: Path):
                 yield d, bucket.value, rd
 
 
-def load_run(run_dir: str | Path, judge: str | None = None) -> dict:
+def row_filter(manifest: str | Path | None, rows: int = 0) -> set[tuple[str, str]] | None:
+    """{(clip_id, bucket)} of the first `rows` manifest rows (all when 0); None without a manifest.
+
+    Lets a report compare runs on a common row set when one run dir also holds clips the others
+    lack (e.g. the a2a runs hold 10 nonverbal clips that gt/random do not).
+    """
+    if not manifest:
+        return None
+    keys: set[tuple[str, str]] = set()
+    with open(manifest, encoding="utf-8") as f:
+        for i, line in enumerate(f):
+            if rows and i >= rows:
+                break
+            if line.strip():
+                d = json.loads(line)
+                keys.add((d["clip_id"], d["bucket"]))
+    return keys
+
+
+def load_run(run_dir: str | Path, judge: str | None = None,
+             keep: set[tuple[str, str]] | None = None) -> dict:
     """{"run", "provider", "mode", "judge", "clips": [{clip_id, bucket, dynamic_type, axes, overall, passed, latency_ms}]}.
 
     One entry per scored manifest row (`<clip>/<bucket>/`), so a clip present in both buckets
-    contributes two entries.
+    contributes two entries. `keep` (from `row_filter`) restricts the rows to those (clip_id, bucket).
     """
     run_dir = Path(run_dir)
     if not run_dir.is_dir():
@@ -81,6 +101,8 @@ def load_run(run_dir: str | Path, judge: str | None = None) -> dict:
     provider = mode = judge_name = None
     clips: list[dict] = []
     for d, bucket, rd in iter_row_dirs(run_dir):
+        if keep is not None and (d.name, bucket) not in keep:
+            continue
         j = _read_json(rd / "judge.json")
         t = _read_json(rd / "timing.json")
         if j is None and t is None:
@@ -161,11 +183,11 @@ def _metrics(clips: list[dict], *, n_boot: int, seed: int) -> dict:
 # --- public tables ---------------------------------------------------------------------
 
 def summarise(run_dirs: Iterable[str | Path], *, judge: str | None = None, n_boot: int = N_BOOT,
-              seed: int = SEED) -> pd.DataFrame:
+              seed: int = SEED, keep: set[tuple[str, str]] | None = None) -> pd.DataFrame:
     """One row per run dir: provider, mode, n, each metric with `<metric>_lo/_hi` 95 % bootstrap CI columns."""
     rows = []
     for rd in run_dirs:
-        r = load_run(rd, judge)
+        r = load_run(rd, judge, keep)
         row = {"run": r["run"], "provider": r["provider"], "mode": r["mode"], "judge": r["judge"]}
         row.update(_metrics(r["clips"], n_boot=n_boot, seed=seed))
         rows.append(row)
@@ -173,11 +195,11 @@ def summarise(run_dirs: Iterable[str | Path], *, judge: str | None = None, n_boo
 
 
 def per_dynamic(run_dirs: Iterable[str | Path], *, judge: str | None = None, n_boot: int = N_BOOT,
-                seed: int = SEED) -> pd.DataFrame:
+                seed: int = SEED, keep: set[tuple[str, str]] | None = None) -> pd.DataFrame:
     """One row per (run dir, dynamic) with the same metric/CI columns as `summarise`."""
     rows = []
     for rd in run_dirs:
-        r = load_run(rd, judge)
+        r = load_run(rd, judge, keep)
         by_dyn: dict[str, list[dict]] = {}
         for c in r["clips"]:
             by_dyn.setdefault(c["dynamic_type"] or "?", []).append(c)
@@ -259,15 +281,22 @@ def to_markdown(df: pd.DataFrame, id_cols: list[str]) -> str:
 
 
 def write(run_dirs: Iterable[str | Path], per_dynamic: bool = False, out: str | Path = "results/summary.md", *,
-          judge: str | None = None, n_boot: int = N_BOOT, seed: int = SEED) -> Path:
-    """Write `<out>` (markdown) and `<out stem>.csv` (+ `<stem>_per_dynamic.csv` when requested)."""
+          judge: str | None = None, n_boot: int = N_BOOT, seed: int = SEED,
+          manifest: str | Path | None = None, rows: int = 0) -> Path:
+    """Write `<out>` (markdown) and `<out stem>.csv` (+ `<stem>_per_dynamic.csv` when requested).
+
+    `manifest` (+ `rows` = first N rows) restricts every run to that common row set.
+    """
     run_dirs = [Path(r) for r in run_dirs]
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    df = summarise(run_dirs, judge=judge, n_boot=n_boot, seed=seed)
+    keep = row_filter(manifest, rows)
+    df = summarise(run_dirs, judge=judge, n_boot=n_boot, seed=seed, keep=keep)
     df.to_csv(out.with_suffix(".csv"), index=False)
     judges = sorted({str(j) for j in df.get("judge", pd.Series(dtype=object)).dropna()}) if not df.empty else []
-    note = (f"Judge: {', '.join(judges) or '—'}. n = manifest rows (clip, bucket) scored. "
+    scope = (f" Rows restricted to {'the first ' + str(rows) + ' rows of ' if rows else ''}{manifest}."
+             if manifest else "")
+    note = (f"Judge: {', '.join(judges) or '—'}. n = manifest rows (clip, bucket) scored.{scope} "
             "Overall = mean of each perception row's available judge axes. "
             f"Brackets are 95 % bootstrap CIs over rows ({n_boot} resamples, seed {seed}). "
             "TOR-Align % = fraction of timed rows whose takeover matches the expected class; latency is the median.")
@@ -280,7 +309,7 @@ def write(run_dirs: Iterable[str | Path], per_dynamic: bool = False, out: str | 
         to_markdown(df, ["provider", "mode"]),
     ]
     if per_dynamic:
-        pdf = _per_dynamic_table(run_dirs, judge=judge, n_boot=n_boot, seed=seed)
+        pdf = _per_dynamic_table(run_dirs, judge=judge, n_boot=n_boot, seed=seed, keep=keep)
         pdf.to_csv(out.with_name(out.stem + "_per_dynamic.csv"), index=False)
         parts += ["## Per dynamic", "", to_markdown(pdf, ["provider", "mode", "dynamic_type"])]
     out.write_text("\n".join(parts), encoding="utf-8")

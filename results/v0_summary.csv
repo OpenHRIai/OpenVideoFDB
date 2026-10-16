@@ -1,0 +1,7 @@
+run,provider,mode,judge,n,Fluency,Fluency_lo,Fluency_hi,Fluency_n,Conv. Flow,Conv. Flow_lo,Conv. Flow_hi,Conv. Flow_n,Grounding,Grounding_lo,Grounding_hi,Grounding_n,Overall,Overall_lo,Overall_hi,Overall_n,TOR-Align %,TOR-Align %_lo,TOR-Align %_hi,TOR-Align %_n,Latency ms,Latency ms_lo,Latency ms_hi,Latency ms_n
+gt,human_gt,av,gpt-4o,60,4.25,3.8,4.65,20,4.6,4.0,5.0,10,3.4,2.9,3.9,10,4.125,3.675,4.5,20,100.0,100.0,100.0,40,507.5,304.0,652.0,32
+random,random,av,gpt-4o,60,2.55,1.65,3.35,20,3.4,2.0,4.502499999999998,10,2.3,2.0,2.7,10,2.7,1.925,3.425,20,35.0,22.5,50.0,40,40.0,0.0,2176.0,13
+gemini_live_av,gemini_live,av,gpt-4o,60,3.25,2.4,4.05,20,4.4,3.4,5.0,10,2.9,2.2975,3.6,10,3.45,2.7,4.125,20,60.0,45.0,75.0,40,704.5,264.0,1224.0,22
+gemini_live_a2a,gemini_live,a2a,gpt-4o,60,3.55,2.7487500000000002,4.25,20,4.4,3.4,5.0,10,3.2,2.6,3.7,10,3.675,3.0,4.275,20,57.5,42.5,72.5,40,694.5,245.5,1182.0,20
+openai_realtime_av,openai_realtime,av,gpt-4o,60,3.05,2.0987500000000003,4.0,20,4.5,3.5,5.0,10,3.4,2.7,4.1,10,3.5,2.75,4.25,20,50.0,35.0,65.0,40,904.0,133.0,1928.0,19
+openai_realtime_a2a,openai_realtime,a2a,gpt-4o,60,2.5,1.65,3.351249999999999,20,2.9,1.8,4.0,10,3.3,2.8,3.7,10,2.8,2.15,3.475,20,50.0,35.0,65.0,40,712.0,599.5,872.0,26

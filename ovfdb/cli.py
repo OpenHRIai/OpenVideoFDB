@@ -120,10 +120,14 @@ def score(run_dir: str, judge: str = "gpt-4o", axes: str = "all", manifest: str 
 
 
 @app.command()
-def report(run_dirs: list[str], per_dynamic: bool = False, out: str = "results/summary.md"):
-    """WS5/WS8: Table-1 style summary with bootstrap CIs."""
+def report(run_dirs: list[str], per_dynamic: bool = False, out: str = "results/summary.md",
+           manifest: str = "", rows: int = 0):
+    """WS5/WS8: Table-1 style summary with bootstrap CIs.
+
+    --manifest (+ --rows N = its first N rows) restricts every run to that common row set.
+    """
     from ovfdb.score import report as rep
-    rep.write(run_dirs, per_dynamic=per_dynamic, out=out)
+    rep.write(run_dirs, per_dynamic=per_dynamic, out=out, manifest=manifest or None, rows=rows)
 
 
 if __name__ == "__main__":
