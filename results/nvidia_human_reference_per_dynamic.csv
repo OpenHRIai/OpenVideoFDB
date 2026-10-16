@@ -1,0 +1,3 @@
+run,Model,Setting,group,provider,mode,model,dynamic_type,n,Fluency,Fluency_lo,Fluency_hi,Fluency_n,Conv. Flow,Conv. Flow_lo,Conv. Flow_hi,Conv. Flow_n,Vis. Ground.,Vis. Ground._lo,Vis. Ground._hi,Vis. Ground._n,Overall,Overall_lo,Overall_hi,Overall_n,TOR-Align %,TOR-Align %_lo,TOR-Align %_hi,TOR-Align %_n,Latency ms,Latency ms_lo,Latency ms_hi,Latency ms_n
+gt,Human reference,AV2AV,REF,human_gt,av,,Laughter,28,4.071428571428571,3.5714285714285716,4.5,14,,,,0,3.642857142857143,3.2142857142857144,4.071428571428571,14,3.857142857142857,3.392857142857143,4.286607142857142,14,,,,0,,,,0
+gt,Human reference,AV2AV,REF,human_gt,av,,Nonverbal Backchanneling,32,5.0,5.0,5.0,16,4.0625,4.0,4.1875,16,,,,0,4.53125,4.5,4.59375,16,100.0,100.0,100.0,16,,,,0
