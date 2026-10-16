@@ -149,7 +149,7 @@ docs/reference/        verbatim paper text (CC BY 4.0) and the project-page tabl
 
 ## Licences and attribution
 
-Code: MIT. Manifests and everything derived from Seamless Interaction (windows, transcript
+Code: MIT (`LICENSE`). Data: see `LICENSE-DATA.md`. Manifests and everything derived from Seamless Interaction (windows, transcript
 excerpts, prompts, captions, review decisions): CC BY-NC 4.0, with attribution to Meta AI's
 Seamless Interaction dataset. The NVIDIA VideoFDB dataset is gated and non-redistributable;
 this repository contains a loader only and never any of its media or annotations. Paper text
