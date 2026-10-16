@@ -102,7 +102,8 @@ def _chunks(pcm: bytes) -> list[bytes]:
 # --- streaming ----------------------------------------------------------------
 
 async def stream_sample(sample: Sample, agent: Agent, mode: Mode, fps: float = DEFAULT_FRAME_FPS,
-                        tail_s: float = DEFAULT_TAIL_S, out_dir: str | Path | None = None) -> AgentRun:
+                        tail_s: float = DEFAULT_TAIL_S, out_dir: str | Path | None = None,
+                        extra_meta: dict | None = None) -> AgentRun:
     """Stream one Sample through `agent` in real time and return the AgentRun.
 
     If `out_dir` is given, writes `<out_dir>/agent.wav` and `<out_dir>/events.jsonl`
@@ -134,7 +135,7 @@ async def stream_sample(sample: Sample, agent: Agent, mode: Mode, fps: float = D
     except Exception as e:
         errors.append(f"start: {e!r}")
         log.exception("agent.start failed for %s", sample.clip_id)
-        return _finish(sample, agent, mode, rec, clip_s + tail_s, started_at, 0.0, errors, out_dir, {})
+        return _finish(sample, agent, mode, rec, clip_s + tail_s, started_at, 0.0, errors, out_dir, dict(extra_meta or {}))
 
     t0 = time.monotonic()
     stop_drain = asyncio.Event()
@@ -215,7 +216,8 @@ async def stream_sample(sample: Sample, agent: Agent, mode: Mode, fps: float = D
             "clip_s": round(clip_s, 3), "tail_s": tail_s, "fps": fps,
             "agent_audio_end_s": round(rec.play_head_s, 3)}
     errors.extend(getattr(agent, "errors", []))
-    return _finish(sample, agent, mode, rec, clip_s + tail_s, started_at, drift_ms, errors, out_dir, meta)
+    return _finish(sample, agent, mode, rec, clip_s + tail_s, started_at, drift_ms, errors, out_dir,
+                   {**meta, **(extra_meta or {})})
 
 
 def _finish(sample: Sample, agent: Agent, mode: Mode, rec: Recorder, duration_s: float, started_at: str,
@@ -279,6 +281,9 @@ def run_manifest(manifest: str | Path, provider: str, mode: str = "av", out: str
     if mode not in ("av", "a2a"):
         raise ValueError(f"mode must be av or a2a, got {mode!r}")
     samples = read_manifest(manifest)
+    out_dir_root = Path(out or f"runs/{provider}_{mode}")
+    out_dir_root.mkdir(parents=True, exist_ok=True)
+    (out_dir_root / "manifest.jsonl").write_text(Path(manifest).read_text(encoding="utf-8"), encoding="utf-8")
     todo = samples[:limit] if limit else samples
     out_dir = Path(out or f"runs/{provider}_{mode}")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -296,7 +301,8 @@ def run_manifest(manifest: str | Path, provider: str, mode: str = "av", out: str
             async with sem:
                 agent = factory(s, samples, model)
                 log.info("run %s via %s", s.clip_id, agent.name)
-                run = await stream_sample(s, agent, mode, fps=fps, tail_s=tail_s, out_dir=clip_dir)
+                run = await stream_sample(s, agent, mode, fps=fps, tail_s=tail_s, out_dir=clip_dir,
+                                          extra_meta={"manifest": str(manifest)})
                 if run.errors:
                     log.warning("%s: %d error(s): %s", s.clip_id, len(run.errors), run.errors[:2])
                 results.append(run)

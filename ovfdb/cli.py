@@ -108,10 +108,14 @@ def run(manifest: str, provider: str = typer.Option(..., "--provider", help="gem
 
 
 @app.command("score-timing")
-def score_timing(run_dir: str):
-    """WS4: ASR + timing metrics for every clip in a run."""
+def score_timing(run_dir: str, manifest: str = "", force: bool = False):
+    """WS4: ASR + timing metrics for every clip in a run.
+
+    --manifest overrides the manifest (else run.json meta, <run_dir>/manifest.jsonl, manifest/ovfdb_v0.jsonl);
+    --force recomputes timing.json (ASR words stay cached).
+    """
     from ovfdb.score import pipeline  # WS4
-    pipeline.score_timing(run_dir)
+    pipeline.score_timing(run_dir, manifest=manifest or None, force=force)
 
 
 @app.command()
