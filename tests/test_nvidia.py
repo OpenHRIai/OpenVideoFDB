@@ -42,5 +42,7 @@ def test_load_validation_split():
         assert r.source == "nvidia" and r.av_caption and r.system_prompt and r.duration_s > 0
         assert 0 <= r.dynamic_start_s <= r.dynamic_end_s <= r.duration_s + 0.5
         assert Path(r.user_audio_path).exists() and Path(r.user_video_path).exists()
-        assert r.partner_audio_path and Path(r.partner_audio_path).exists()      # validation ships speaker2
         assert all(w.end >= w.start for w in r.user_words)
+    # the user is speaker1 or speaker2 per row; the other channel ships for only some validation clips
+    with_partner = [r for r in rows if r.partner_audio_path]
+    assert with_partner and all(Path(r.partner_audio_path).exists() for r in with_partner)

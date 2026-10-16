@@ -3,9 +3,10 @@
 * `snapshot()` downloads the gated dataset (needs `HF_TOKEN` in `.env`) to `data/nvidia/`.
 * `load(split)` joins `0_metadata_<split>` ⋈ `0_annotations_<split>` on `(id, sample_id, bucket)`
   and maps each row 1:1 onto `Sample` (`sample_id` → `clip_id`, `qwen_caption_full` →
-  `av_caption`, `user_transcript_chunks` → `user_words`). Validation ships both speakers, so
-  `speaker2.{wav,mp4}` becomes the human-GT partner channel; test ships only `speaker1` (the
-  user), so there is no human reference on test.
+  `av_caption`, `user_transcript_chunks` → `user_words`). The user is `speaker1` or `speaker2` per row (`audio_file_path`); when the
+  other speaker's files are present (some validation clips: 3 of 8 in release 1.0.0) they become
+  the human-GT partner channel. Test ships only the user's channel, so there is no human reference
+  on test. Media as shipped: VP9 720p 30 fps mp4 with Opus audio, 32 kHz PCM16 mono wav.
 * `ensure_h264(path)` writes an H.264 copy of a VP9-in-MP4 video under `data/nvidia/_h264/`
   for decoders that cannot read VP9 (our PyAV frame sampler can; the helper exists for others).
 * `write_manifest_for(split, out)` emits an `ovfdb` manifest so the usual `run` / `score` /
