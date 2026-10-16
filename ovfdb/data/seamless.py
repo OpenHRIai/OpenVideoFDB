@@ -11,6 +11,7 @@ import json
 import shutil
 import subprocess
 from dataclasses import dataclass, fields
+from functools import lru_cache
 from pathlib import Path
 
 import httpx
@@ -103,6 +104,7 @@ def interaction_key(file_id: str) -> str:
     return file_id.rsplit("_P", 1)[0]
 
 
+@lru_cache(maxsize=4)
 def load_filelist(cache: Path = DATA_DIR / "filelist.csv") -> pd.DataFrame:
     if not cache.exists():
         cache.parent.mkdir(parents=True, exist_ok=True)
