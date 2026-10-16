@@ -272,8 +272,9 @@ def cue_line(sample: Sample) -> str | None:
     """'Mined cue: ...' --- the specific user behaviour the clip was selected for (payload v2).
 
     Built from `sample.source_meta["evidence"]` written by the WS2 miners; None when there is no
-    usable evidence (e.g. NVIDIA samples). Describes the USER's cue only --- never what the human
-    partner did next, so the line is identical for GT and model runs.
+    usable evidence (e.g. NVIDIA samples). Describes the USER's cue only --- never anything the human
+    partner said or did (`b_text*`, `backchannel_text`, `partner_event`, `mode`, lags), because for
+    a model run the agent said something else and the line must be identical for GT and model runs.
     """
     meta = sample.source_meta or {}
     ev = meta.get("evidence") or {}
@@ -296,28 +297,22 @@ def cue_line(sample: Sample) -> str | None:
                          + (f" (gaze-away overlaps the pause by {float(go):.2f}s)" if go else ""))
         return "Mined cue: " + "; ".join(parts) + "."
     if rule == "laughter_p":
-        said = _ev_text(ev, "b_text_before")
         dur = ev.get("laugh_s")
-        s = f"the user laughs{f' ({float(dur):.1f}s)' if dur else ''} at t={ds:.2f}s"
-        s += f", right after the agent said {said}" if said else ", in reaction to what the agent just said"
+        s = f"the user laughs{f' ({float(dur):.1f}s)' if dur else ''} at t={ds:.2f}s in reaction to what the agent had just said"
         return f"Mined cue: {s} (positive feedback, not a turn request)."
     if rule == "laughter_g":
         own = _ev_text(ev, "a_text")
         return (f"Mined cue: the user laughs at t={ds:.2f}s during their own turn"
                 + (f" ({own})" if own else "") + "; the agent is the listener.")
     if rule == "verbal_backchanneling":
-        bc, dur = _ev_text(ev, "backchannel_text"), ev.get("backchannel_s")
-        return (f"Mined cue: the user holds the floor and the window ({win}) is where a listener would drop a short "
-                f"backchannel{f' (the human partner-side token here was {bc}' if bc else ''}"
-                + (f", {float(dur):.2f}s)" if bc and dur else (")" if bc else "")) + ".")
+        return (f"Mined cue: the user holds the floor through the window ({win}); this is where a listener would "
+                f"drop a short backchannel without taking the turn.")
     if rule == "verbal_interruption":
-        a_text, b_text = _ev_text(ev, "a_text"), _ev_text(ev, "b_text")
+        a_text = _ev_text(ev, "a_text")
         s = f"the user starts talking over the agent at t={ds:.2f}s"
         if a_text:
             s += f" with {a_text}"
-        if b_text:
-            s += f", while the agent was mid-sentence ({b_text})"
-        return f"Mined cue: {s}; the user holds the floor afterwards."
+        return f"Mined cue: {s}, while the agent is mid-sentence; the user holds the floor afterwards."
     if rule == "turn_taking":
         a_text = _ev_text(ev, "a_text")
         q = " (a question)" if ev.get("ends_with_question") else ""
@@ -337,9 +332,8 @@ def cue_line(sample: Sample) -> str | None:
         v = {1: "positive", -1: "negative"}.get(val, "")
         return f"Mined cue: the user shows a facial expression ({what or 'expression'}{', ' + v if v else ''}){at}."
     if rule == "adaptor_handling":
-        mode = str(ev.get("mode") or "").replace("_", " ")
-        return (f"Mined cue: the user makes a self-directed, non-communicative gesture ({what or 'self-touch'}){at}"
-                + (f" while the {mode}" if mode else "") + "; it carries no conversational meaning.")
+        return (f"Mined cue: the user makes a self-directed, non-communicative gesture ({what or 'self-touch'}){at}; "
+                "it carries no conversational meaning and is not a turn request.")
     if rule == "nonverbal_interruption":
         return (f"Mined cue: the user, still silent, makes an interruption gesture ({what or 'gesture'}){at} "
                 f"while the agent is mid-sentence; the user then takes the floor.")

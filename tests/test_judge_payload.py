@@ -118,8 +118,9 @@ def test_cue_line_dialogue_rules():
                     source_meta=_meta("gaze_avoidance_with_pause", gap_s=1.2, gaze_overlap_s=1.2, text_before="so"))
     assert "looks away from the partner during the pause (gaze-away overlaps the pause by 1.20s)" in judge.cue_line(g)
     la = make_sample(dynamic=DynamicType.LAUGHTER, source_meta=_meta("laughter_p", laugh_s=2.5, b_text_before="Frisbee."))
-    assert judge.cue_line(la) == ('Mined cue: the user laughs (2.5s) at t=4.00s, right after the agent said "Frisbee." '
+    assert judge.cue_line(la) == ("Mined cue: the user laughs (2.5s) at t=4.00s in reaction to what the agent had just said "
                                   "(positive feedback, not a turn request).")
+    assert "Frisbee" not in judge.cue_line(la)        # the human partner's words never reach the judge as "the agent said"
     lg = make_sample(dynamic=DynamicType.LAUGHTER, bucket=Bucket.GENERATION,
                      source_meta=_meta("laughter_g", laugh_s=1.0, a_text="bench press, squats. Frisbee"))
     assert judge.cue_line(lg).startswith('Mined cue: the user laughs at t=4.00s during their own turn ("bench press')
@@ -127,15 +128,16 @@ def test_cue_line_dialogue_rules():
                      source_meta=_meta("verbal_interruption", a_text="But that's why", b_text="so if I have to", b_stop_s=0.99))
     line = judge.cue_line(vi)
     assert line == ('Mined cue: the user starts talking over the agent at t=4.00s with "But that\'s why", while the agent '
-                    'was mid-sentence ("so if I have to"); the user holds the floor afterwards.')
-    assert "0.99" not in line                       # never leak what the human partner did next
+                    "is mid-sentence; the user holds the floor afterwards.")
+    assert "0.99" not in line and "so if I have to" not in line   # never leak what the human partner said / did
     tt = make_sample(dynamic=DynamicType.TURN_TAKING, bucket=Bucket.GENERATION,
                      source_meta=_meta("turn_taking", a_text="Did you have dreams?", ends_with_question=True))
     assert judge.cue_line(tt) == ('Mined cue: the user finishes a turn (a question) at t=4.00s with "Did you have dreams?" '
                                   "and offers the floor; the handoff window is t=4.00s to t=7.00s.")
     vb = make_sample(dynamic=DynamicType.VERBAL_BACKCHANNELING, bucket=Bucket.GENERATION,
                      source_meta=_meta("verbal_backchanneling", backchannel_text="Yeah.", backchannel_s=0.32))
-    assert judge.cue_line(vb).endswith('(the human partner-side token here was "Yeah.", 0.32s).')
+    assert judge.cue_line(vb) == ("Mined cue: the user holds the floor through the window (t=4.00s to t=7.00s); this is "
+                                  "where a listener would drop a short backchannel without taking the turn.")
     # long evidence text is cut at a word boundary from the end
     long = make_sample(source_meta=_meta("pause_handling", text_before="word " * 60 + "anxious and stuff."))
     assert '"...word word word' in judge.cue_line(long) and "...ord" not in judge.cue_line(long)
@@ -149,8 +151,8 @@ def test_cue_line_nonverbal_rules_rebase_event_times():
     s = make_sample(dynamic=DynamicType.ADAPTOR_HANDLING, dynamic_start_s=18.6, dynamic_end_s=19.2, duration_s=30.0,
                     source_meta=_meta("adaptor_handling", t0=1.0, event=ev, mode="partner_speaking"))
     assert judge.cue_line(s) == ("Mined cue: the user makes a self-directed, non-communicative gesture "
-                                 "(self touch (adjusts pants)) at 18.60-19.20s while the partner speaking; "
-                                 "it carries no conversational meaning.")
+                                 "(self touch (adjusts pants)) at 18.60-19.20s; "
+                                 "it carries no conversational meaning and is not a turn request.")
     nod = {"kind": "nod", "start": 17.33, "end": 18.03, "note": "", "source": "movement"}
     p = make_sample(dynamic=DynamicType.NONVERBAL_BACKCHANNELING, source_meta=_meta("nv_backchanneling_p", t0=1.0, event=nod))
     assert judge.cue_line(p) == ("Mined cue: the user, listening, nod at 16.33-17.03s as listener feedback without "
