@@ -47,6 +47,7 @@ HANDOFF_S = 1.5           # Turn-taking window after the user's turn end (paper 
 YIELD_S = 1.5             # Verbal Interruption window after the user's onset (= the yield-required limit)
 BC_SLOT_BEFORE_S = 0.25   # Verbal Backchanneling window: this much before the user's intra-turn gap ...
 BC_SLOT_AFTER_S = 1.0     # ... to this much after it (listeners backchannel at or just after a clause end)
+FILLERS = frozenset({"like", "and", "but", "so", "um", "uh", "or", "because", "cause", "that", "the", "a", "of", "to"})
 
 LAUGH_TOKEN_RE = re.compile(r"\[laugh[a-z]*\]|\(laugh[a-z]*\)|<laugh[a-z]*>|\bha(?:ha)+\b|\bhehe+\b", re.IGNORECASE)
 
@@ -191,8 +192,10 @@ def find_verbal_backchanneling(vad_a, utts_a, vad_b, utts_b, min_turn=6.0, min_b
     to ``BC_SLOT_AFTER_S`` after it (~1.3-1.9 s).
 
     User-cue-only: A has held the floor for >= ``min_before`` s, keeps going
-    for >= ``min_after`` s, the whole turn is >= ``min_turn`` s, and B was a
-    silent listener for ``listener_s`` before the slot. Whether B actually said
+    for >= ``min_after`` s, the whole turn is >= ``min_turn`` s, the last word
+    before the gap ends a clause (transcript punctuation, not a filler such as
+    "like"), and B was a silent listener for ``listener_s`` before the slot.
+    Whether B actually said
     "mhm" is NOT used (v0 built the window around B's backchannel, so GT
     passed by construction; paper human reference = 69 %).
     """
@@ -211,7 +214,14 @@ def find_verbal_backchanneling(vad_a, utts_a, vad_b, utts_b, min_turn=6.0, min_b
                 continue                             # B was not listening quietly: no clean slot
             ds, de = s0.end - BC_SLOT_BEFORE_S, s1.start + BC_SLOT_AFTER_S
             text_before = _text_in(utts_a, max(t_start, s0.end - 6.0), s0.end)
-            clause_end = text_before.rstrip().endswith((",", ".", "?", "!", ";", "and", "but", "so", "like"))
+            words_before = [w for u in utts_a for w in u.words if s0.end - 1.5 <= w.end <= s0.end + 0.2]
+            last = (words_before[-1].text if words_before else text_before).rstrip()
+            # listeners backchannel at completion points, not inside a clause: the last word before the gap
+            # must carry clause-final punctuation ("coast," "year."), and must not be a filler / conjunction
+            # ("like", "and", "so" --- human review 2026-10-16 rejected a slot after "it's like")
+            if not last.endswith((",", ".", "?", "!", ";")) or last.rstrip(",.?!;").lower() in FILLERS:
+                continue
+            clause_end = True
             out.append(Candidate(
                 DynamicType.VERBAL_BACKCHANNELING, Bucket.GENERATION, "a", ds, de,
                 {"rule": "verbal_backchanneling", "gap_s": round(gap, 2), "host_turn": [round(t_start, 2), round(t_end, 2)],

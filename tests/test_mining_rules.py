@@ -94,6 +94,9 @@ def test_verbal_backchanneling_rule():
     assert [(x.ds_raw, x.de_raw) for x in with_bc] == [(x.ds_raw, x.de_raw) for x in without] == [(c.ds_raw, c.de_raw)]
     # B talking in the 2 s before the slot: B is not a quiet listener, no slot
     assert not D.find_verbal_backchanneling(vad_a, utts_a, [seg(3.0, 4.0)], [utt(3.0, 4.0, "oh really")])
+    # a gap right after a filler ("it's like") or inside a clause (no punctuation) is not a slot
+    assert not D.find_verbal_backchanneling(vad_a, [utt(0, 4.5, "and giving people grace is like"), utts_a[1]], [], [])
+    assert not D.find_verbal_backchanneling(vad_a, [utt(0, 4.5, "and then we drove all the way up the"), utts_a[1]], [], [])
     # a turn shorter than 6 s, or a slot in its first 3 s / last 1.5 s, is not a slot
     assert not D.find_verbal_backchanneling([seg(0, 2.5), seg(2.8, 5.5)], utts_a, [], [])
     assert not D.find_verbal_backchanneling([seg(0, 2.0), seg(2.3, 10)], utts_a, [], [])
