@@ -268,19 +268,61 @@ def _ev_event(sample: Sample, ev: dict, key: str = "event") -> tuple[str, str]:
     return what, f"{a:.2f}-{b:.2f}s"
 
 
+#: Generic cue per (dynamic, bucket) for rows without mining evidence (NVIDIA annotations): the same
+#: "what the user does and what it is not" hint the mined cue gives, without clip-specific detail.
+GENERIC_CUES: dict[tuple[DynamicType, Bucket], str] = {
+    (DynamicType.PAUSE_HANDLING, Bucket.PERCEPTION):
+        "the user pauses mid-thought inside the window ({win}) and is NOT finished speaking.",
+    (DynamicType.GAZE_AVOIDANCE_WITH_PAUSE, Bucket.PERCEPTION):
+        "the user pauses mid-thought and looks away during the window ({win}): a thinking cue, not a turn offer.",
+    (DynamicType.LAUGHTER, Bucket.PERCEPTION):
+        "the user laughs during the window ({win}) in reaction to what the agent had just said (positive feedback, "
+        "not a turn request; the agent continuing warmly is the natural response).",
+    (DynamicType.LAUGHTER, Bucket.GENERATION):
+        "the user laughs during their own turn in the window ({win}); the agent is the listener.",
+    (DynamicType.NONVERBAL_BACKCHANNELING, Bucket.PERCEPTION):
+        "the user, listening, nods / smiles as listener feedback during the window ({win}) without taking the floor; "
+        "the agent is the one talking.",
+    (DynamicType.NONVERBAL_BACKCHANNELING, Bucket.GENERATION):
+        "the user is mid-turn during the window ({win}); a listener is expected to nod/smile without taking the floor.",
+    (DynamicType.FACE_EMOTION_DISPLAY, Bucket.PERCEPTION):
+        "the user shows a visible facial expression with affect during the window ({win}).",
+    (DynamicType.FACE_EMOTION_DISPLAY, Bucket.GENERATION):
+        "the user shows a visible facial expression with affect during the window ({win}).",
+    (DynamicType.EMOTION_MATCHING, Bucket.GENERATION):
+        "the user shows affect at the start of the window ({win}).",
+    (DynamicType.ADAPTOR_HANDLING, Bucket.PERCEPTION):
+        "the user makes a self-directed, non-communicative gesture during the window ({win}); it carries no "
+        "conversational meaning and is not a turn request.",
+    (DynamicType.NONVERBAL_INTERRUPTION, Bucket.PERCEPTION):
+        "the user, still silent, makes an interruption gesture at the start of the window ({win}) while the agent is "
+        "mid-sentence; the user then takes the floor.",
+    (DynamicType.VERBAL_INTERRUPTION, Bucket.GENERATION):
+        "the user starts talking over the agent at the start of the window ({win}) while the agent is mid-sentence; "
+        "the user holds the floor afterwards.",
+    (DynamicType.TURN_TAKING, Bucket.GENERATION):
+        "the user finishes a turn and offers the floor; the handoff window is {win}.",
+    (DynamicType.VERBAL_BACKCHANNELING, Bucket.GENERATION):
+        "the user holds the floor through the window ({win}); this is where a listener would drop a short "
+        "backchannel without taking the turn.",
+}
+
+
 def cue_line(sample: Sample) -> str | None:
     """'Mined cue: ...' --- the specific user behaviour the clip was selected for (payload v2).
 
-    Built from `sample.source_meta["evidence"]` written by the WS2 miners; None when there is no
-    usable evidence (e.g. NVIDIA samples). Describes the USER's cue only --- never anything the human
-    partner said or did (`b_text*`, `backchannel_text`, `partner_event`, `mode`, lags), because for
-    a model run the agent said something else and the line must be identical for GT and model runs.
+    Built from `sample.source_meta["evidence"]` written by the WS2 miners. Without usable evidence
+    (NVIDIA annotations) falls back to the generic per-dynamic cue in `GENERIC_CUES` ("Annotated
+    cue: ..."), None if the (dynamic, bucket) has none. Describes the USER's cue only --- never anything
+    the human partner said or did (`b_text*`, `backchannel_text`, `partner_event`, `mode`, lags),
+    because for a model run the agent said something else and the line must be identical for GT and
+    model runs.
     """
     meta = sample.source_meta or {}
     ev = meta.get("evidence") or {}
     rule = str(meta.get("mining_rule") or ev.get("rule") or "")
     if not rule or not ev:
-        return None
+        return _generic_cue(sample)
     ds, de = sample.dynamic_start_s, sample.dynamic_end_s
     win = f"t={ds:.2f}s to t={de:.2f}s"
     gap = ev.get("gap_s")
@@ -339,7 +381,15 @@ def cue_line(sample: Sample) -> str | None:
     if rule == "nonverbal_interruption":
         return (f"Mined cue: the user, still silent, makes an interruption gesture ({what or 'gesture'}){at} "
                 f"while the agent is mid-sentence; the user then takes the floor.")
-    return None
+    return _generic_cue(sample)                      # unknown rule: still give the judge the generic cue
+
+
+def _generic_cue(sample: Sample) -> str | None:
+    generic = GENERIC_CUES.get((sample.dynamic_type, sample.bucket))
+    if generic is None:
+        return None
+    win = f"t={sample.dynamic_start_s:.2f}s to t={sample.dynamic_end_s:.2f}s"
+    return "Annotated cue: " + generic.format(win=win)
 
 
 def _quoted(block: str) -> str:

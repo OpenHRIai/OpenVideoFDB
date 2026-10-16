@@ -56,14 +56,14 @@ def test_payload_has_role_overlap_partition_caption():
     msg = judge.build_user_message(make_sample(), make_timing())
     assert msg.startswith("Category: Pause Handling\nBucket: perception\nAgent role: SILENT. ")
     assert judge.role_description(AgentRole.SILENT) in msg
-    assert "Dynamic event: t=4.00s to t=7.00s\nClip duration: 10.00s\nUser speech state: " in msg
+    assert "Dynamic event: t=4.00s to t=7.00s\nClip duration: 10.00s\nAnnotated cue: " in msg and "\nUser speech state: " in msg
     assert "\nAgent in-window speech: 0.00s (no segments overlap [4.00, 7.00])\n" in msg
     assert "-- DYNAMIC WINDOW (4.00 -> 7.00s) --" in msg and "-- PRE-DYNAMIC" in msg and "-- POST-DYNAMIC" in msg
     assert f'AV caption (covers full clip including the dynamic event):\n"""\n{CAPTION}\n"""\n{judge.CAPTION_CAVEAT}\n' in msg
     assert 'Agent speech transcript:\n"""\nOh, no worries, take your time.\n"""' in msg
     assert msg.endswith("Rate on the 0-5 scale per the rubric above.")
     assert "Yield analysis:" not in msg
-    assert "Mined cue:" not in msg                      # no mining evidence on the synthetic sample
+    assert "Mined cue:" not in msg and "Annotated cue:" in msg   # no mining evidence: generic cue instead
     assert "Agent speech (with timestamps):" not in msg  # no segments in make_timing()
 
 
@@ -144,9 +144,16 @@ def test_cue_line_dialogue_rules():
     # long evidence text is cut at a word boundary from the end
     long = make_sample(source_meta=_meta("pause_handling", text_before="word " * 60 + "anxious and stuff."))
     assert '"...word word word' in judge.cue_line(long) and "...ord" not in judge.cue_line(long)
-    assert judge.cue_line(make_sample()) is None
-    assert judge.cue_line(make_sample(source_meta={"mining_rule": "pause_handling"})) is None
-    assert judge.cue_line(make_sample(source_meta=_meta("some_future_rule", x=1))) is None
+    # no mining evidence (NVIDIA rows): a generic per-dynamic cue, still user-only
+    assert judge.cue_line(make_sample()) == ("Annotated cue: the user pauses mid-thought inside the window "
+                                             "(t=4.00s to t=7.00s) and is NOT finished speaking.")
+    assert judge.cue_line(make_sample(source_meta={"mining_rule": "pause_handling"})).startswith("Annotated cue:")
+    assert judge.cue_line(make_sample(source_meta=_meta("some_future_rule", x=1))).startswith("Annotated cue:")
+    la0 = make_sample(dynamic=DynamicType.LAUGHTER)
+    assert "positive feedback, not a turn request" in judge.cue_line(la0)
+    from ovfdb.schema import AXES
+    for (dyn, bucket) in AXES:                       # every benchmark (dynamic, bucket) has a generic cue
+        assert (dyn, bucket) in judge.GENERIC_CUES, (dyn, bucket)
 
 
 def test_cue_line_nonverbal_rules_rebase_event_times():
