@@ -118,24 +118,40 @@ pairwise agreement 77–89 % within 1 point). Output schema (universal):
 ```json
 {"analysis": "cite timings and quoted phrases", "rating": 0-5, "reasoning": "one sentence"}
 ```
-User message template (`_build_user_message`):
+User message template (`judge.build_user_message`, **payload v2**; lines marked `+`
+are OpenVideoFDB additions to the paper's F.5.1 template, see below):
 ```
 Category: {dynamic_type}
 Bucket: {bucket}
 Agent role: {role description}
 Dynamic event: t={ds}s to t={de}s
 Clip duration: {dur}s
++ Mined cue: {the USER behaviour the clip was selected for, from source_meta.evidence}
++ User speech state: {user speaking X% of the window; speaking at window start | was speaking until T; next user speech at T}
 Agent in-window speech: {X.XXs total across N segment(s) --- [a-b] overlaps by Ys}
 {yield_analysis block, YIELDING roles only}
 AV caption (covers full clip including the dynamic event):
 """{av_caption}"""
++ NOTE on the caption: its USER/PARTNER attribution of speech ... is sometimes swapped. Take who-said-what from the transcripts ...
 User speech (with timestamps):
-"""[t0,t1,text] per chunk"""
-Agent speech segments (times when agent was audible) --- partitioned by dynamic window:
-"""PRE / IN / POST with activity percentages"""
+"""[t0-t1s] text per chunk"""
+Agent speech segments (times when agent was audible) --- partitioned by dynamic window; each span says what was said, or that it was a backchannel / wordless vocalisation:
+"""PRE / IN / POST with activity percentages; + every span line carries "words", backchannel "Yeah" or non-lexical vocalisation, no words (...)"""
++ Agent speech (with timestamps):
++ """[t0-t1s] text per agent segment; wordless VAD regions say (non-lexical vocalisation, no words)"""
 Agent speech transcript:
 """{agent_transcript or [no speech]}"""
 ```
+**Why v2** (calibration v1, `results/calibration_v1.md`): with VAD-derived agent
+segments the judge read wordless spans (breaths, "mhm", laughs) as talk-over, and on
+Laughter clips it called the human partner "repetitive" / "mirroring the user" because
+Gemini's caption had attributed the partner's words to the USER (speech attribution in
+the side-by-side caption is lip-read from a mixed track and is wrong for whole pairs,
+e.g. `V00_S0314_*`). v2 only adds *evidence* lines; rubric and preamble text are
+unchanged. The cue line describes the USER's cue only (never what the human partner did
+next), so GT and model runs receive identical cue text. `judge.PAYLOAD_VERSION` is
+stored in `judge.json` / `judge_summary.json`; the judge cache key covers the payload,
+so a payload change re-judges automatically.
 Yield-analysis block example:
 ```
 Yield analysis:

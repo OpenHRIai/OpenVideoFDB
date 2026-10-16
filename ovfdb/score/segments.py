@@ -173,6 +173,7 @@ class Part:
     t0: float
     t1: float
     spans: list[tuple[float, float]] = field(default_factory=list)
+    segs: list[Segment] = field(default_factory=list)     # source (unclipped) segment of each span
 
     @property
     def active_s(self) -> float:
@@ -210,14 +211,48 @@ def partition(segs: list[Segment], ds: float, de: float, clip_end: float) -> Par
             a, b = max(s.start, part.t0), min(s.end, part.t1)
             if b > a:
                 part.spans.append((a, b))
+                part.segs.append(s)
     return parts
 
 
-def _span_line(s: float, e: float) -> str:
-    return f"[{s:6.2f}, {e:.2f}] {e - s:.2f}s"
+#: Mirrors `timing.is_backchannel` (kept here to avoid a circular import): < 1 s (+0.1 s slack), < 2 words.
+_BACKCHANNEL_MAX_DUR_S = 1.1
+_BACKCHANNEL_MAX_WORDS = 2
+_NOTE_MAX_CHARS = 70
 
 
-def format_partition(parts: Partition) -> str:
+def _short_quote(text: str, limit: int = _NOTE_MAX_CHARS) -> str:
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return f'"{text}"'
+    head = text[: limit - 3]
+    head = head.rsplit(" ", 1)[0] if " " in head else head     # cut at a word boundary
+    return f'"{head.rstrip()}..."'
+
+
+def span_note(seg: Segment, a: float, b: float) -> str:
+    """What the agent was doing acoustically in the span [a, b] of `seg` (judge payload v2).
+
+    A wordless VAD region is flagged as a non-lexical vocalisation so the judge does not read a
+    breath or "mhm" as talk-over; a short one-word segment is flagged as a backchannel; a span that
+    is only part of a longer segment says so and gives the segment's full extent.
+    """
+    if seg.n_words == 0:
+        return 'non-lexical vocalisation, no words (breath / "mhm" / laugh)'
+    q = _short_quote(seg.text)
+    if seg.n_words < _BACKCHANNEL_MAX_WORDS and seg.dur < _BACKCHANNEL_MAX_DUR_S:
+        q = f"backchannel {q}"
+    if (b - a) < seg.dur - 1e-6:
+        return f"part of {q} [{seg.start:.2f}-{seg.end:.2f}]"
+    return q
+
+
+def _span_line(s: float, e: float, note: str = "") -> str:
+    line = f"[{s:6.2f}, {e:.2f}] {e - s:.2f}s"
+    return f"{line}  {note}" if note else line
+
+
+def format_partition(parts: Partition, annotate: bool = True) -> str:
     """Render the partition as the judge payload block (paper F.5.1 example):
 
         -- PRE-DYNAMIC (0.00 -> 37.00s) -- active 10.00s of 37.00s (27%)
@@ -225,6 +260,9 @@ def format_partition(parts: Partition) -> str:
         -- DYNAMIC WINDOW (37.00 -> 46.00s) -- active 0.00s of 9.00s (0%)
         (no agent speech overlaps the dynamic window)
         -- POST-DYNAMIC (46.00 -> 61.00s) -- active 0.00s of 15.00s (0%)
+
+    With `annotate` (payload v2) every span line also carries `span_note`: the words spoken,
+    `backchannel "Yeah"`, or `non-lexical vocalisation, no words (...)`.
     """
     lines: list[str] = []
     for part in (parts.pre, parts.inside, parts.post):
@@ -234,5 +272,6 @@ def format_partition(parts: Partition) -> str:
         )
         if part is parts.inside and not part.spans:
             lines.append("(no agent speech overlaps the dynamic window)")
-        lines.extend(_span_line(s, e) for s, e in part.spans)
+        for (s, e), seg in zip(part.spans, part.segs):
+            lines.append(_span_line(s, e, span_note(seg, s, e) if annotate else ""))
     return "\n".join(lines)

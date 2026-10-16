@@ -80,7 +80,7 @@ def test_overlap_line_none_and_multiple():
 
 def test_partition_block_matches_paper_example():
     segs = [seg(20.24, 24.32), seg(24.64, 26.88), seg(27.20, 30.88)]
-    block = segments.format_partition(segments.partition(segs, 37.0, 46.0, 61.0))
+    block = segments.format_partition(segments.partition(segs, 37.0, 46.0, 61.0), annotate=False)
     assert block == (
         "-- PRE-DYNAMIC (0.00 -> 37.00s) -- active 10.00s of 37.00s (27%)\n"
         "[ 20.24, 24.32] 4.08s\n"
@@ -98,7 +98,28 @@ def test_partition_clips_straddling_segment():
     assert parts.inside.spans == [(5.0, 8.0)]
     assert parts.post.spans == [(8.0, 9.0)]
     assert parts.inside.activity == pytest.approx(1.0)
+    assert parts.pre.segs == parts.inside.segs == parts.post.segs == [seg(4.0, 9.0)]
     assert parts.post.activity == pytest.approx(0.5)
+
+
+def test_partition_block_annotates_spans():
+    # payload v2: wordless VAD span, one-word backchannel, a long utterance clipped at the window edge
+    segs = [
+        Segment(4.29, 5.21, "", 0),
+        Segment(6.0, 6.5, "Yeah.", 1),
+        Segment(8.0, 12.0, "so if I have to do something the next day I usually get more irritated and then", 17),
+    ]
+    block = segments.format_partition(segments.partition(segs, 7.0, 9.0, 12.0))
+    lines = block.splitlines()
+    assert lines[1] == '[  4.29, 5.21] 0.92s  non-lexical vocalisation, no words (breath / "mhm" / laugh)'
+    assert lines[2] == '[  6.00, 6.50] 0.50s  backchannel "Yeah."'
+    assert lines[4].startswith('[  8.00, 9.00] 1.00s  part of "so if I have to do something the next day I usually get more...')
+    assert lines[4].endswith('" [8.00-12.00]')
+    assert lines[6].startswith('[  9.00, 12.00] 3.00s  part of "so if I have')
+    # a straddling backchannel keeps both markers
+    one = segments.partition([Segment(26.98, 27.61, "Frisbee.", 1)], 27.1, 32.0, 40.0)
+    assert segments.span_note(one.pre.segs[0], *one.pre.spans[0]) == 'part of backchannel "Frisbee." [26.98-27.61]'
+    assert segments.span_note(Segment(1.0, 2.0, "well I think", 3), 1.0, 2.0) == '"well I think"'
 
 
 def test_yield_block_matches_paper_example():

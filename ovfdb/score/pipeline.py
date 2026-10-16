@@ -257,7 +257,8 @@ def _clip_judge_payload(sample: Sample, run: AgentRun, judge: str, results: dict
     axes = {a: {"rating": r.rating, "analysis": r.analysis, "reasoning": r.reasoning, "rubric": r.rubric,
                 "cached": r.cached, "usage": r.usage} for a, r in results.items()}
     overall = mean(r.rating for r in results.values()) if results else None
-    block = {"judge": judge, "axes": axes, "overall": overall, "skipped_axes": skipped_axes}
+    block = {"judge": judge, "payload_version": judge_mod.PAYLOAD_VERSION, "axes": axes, "overall": overall,
+             "skipped_axes": skipped_axes}
     by_judge = dict((existing or {}).get("by_judge") or {})
     by_judge[judge] = block
     return {
@@ -323,6 +324,7 @@ def score(run_dir: str | Path, judge: str = judge_mod.DEFAULT_JUDGE, axes: str =
     summary = {
         "run_dir": str(run_dir),
         "judge": judge,
+        "payload_version": judge_mod.PAYLOAD_VERSION,
         "manifest": manifest,
         "n_rows": timing_summary.get("n_rows", 0),
         "n_clips": timing_summary.get("n_clips", 0),

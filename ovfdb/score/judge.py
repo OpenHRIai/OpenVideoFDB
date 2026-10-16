@@ -2,8 +2,13 @@
 
 One call per (clip, axis): system = shared preamble + (universal fluency rubric |
 category rubric) + output-schema reminder; user = the F.5.1 evidence packet built
-from the `Sample` (caption, user words) and the per-clip `timing.json` written by
-WS4 (`overlap_line`, `partition_block`, `yield_block`, `transcript`).
+from the `Sample` (caption, user words, mining evidence) and the per-clip `timing.json`
+written by WS4 (`overlap_line`, `partition_block`, `yield_block`, `segments`, `transcript`).
+
+Payload v2 (calibration v1 -> v2, docs/protocol.md §5) adds to the paper's template: a
+"Mined cue" line from the mining evidence, a "User speech state" line for the window, a
+caveat that the caption's USER/PARTNER speech attribution can be swapped, annotated
+partition spans (words / backchannel / non-lexical) and a timestamped agent transcript.
 
 Judges: `gpt-4o` (OpenAI, paper default), `claude-sonnet-4-6` (Anthropic),
 `gemini-2.5-pro` (google-genai). Results are cached per clip at
@@ -27,7 +32,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from ovfdb.schema import AXES, AgentRole, Axis, Bucket, DynamicType, Sample
-from ovfdb.score.segments import words_to_segments
+from ovfdb.score.segments import activity_fraction, speaking_at, words_to_segments
 
 load_dotenv()
 log = logging.getLogger(__name__)
@@ -40,6 +45,14 @@ NO_USER_SPEECH = "[no user speech]"
 #: Gap (s) between user words that starts a new utterance chunk (same rule as agent segments).
 USER_CHUNK_GAP_S = 0.5
 MAX_OUTPUT_TOKENS = 1024
+#: Bumped whenever `build_user_message` changes shape; stored in judge.json for traceability.
+PAYLOAD_VERSION = 2
+NO_LEXICAL = "(non-lexical vocalisation, no words)"
+CAPTION_CAVEAT = (
+    "NOTE on the caption: its USER/PARTNER attribution of *speech* was inferred from a mixed audio track "
+    "and is sometimes swapped. Take who-said-what from the timestamped transcripts below; use the caption "
+    "for visual behaviour (expressions, gaze, gestures, nods, laughter)."
+)
 
 #: Axes handled by this (text-only) judge. Generation axes go through judge_generation.py.
 PERCEPTION_AXES: frozenset[Axis] = frozenset({Axis.FLUENCY, Axis.CONVERSATIONAL_FLOW, Axis.SEMANTIC_GROUNDING})
@@ -178,12 +191,167 @@ def format_user_speech(sample: Sample, gap: float = USER_CHUNK_GAP_S) -> str:
     return "\n".join(f"[{s.start:.2f}-{s.end:.2f}s] {s.text}" for s in segs)
 
 
+def format_agent_speech(timing_json: dict) -> str | None:
+    """`[t0-t1s] text` per agent segment (payload v2); wordless VAD regions say so. None without segments."""
+    segs = timing_json.get("segments") or []
+    if not segs:
+        return None
+    lines = []
+    for s in sorted(segs, key=lambda x: (x["start"], x["end"])):
+        text = " ".join(str(s.get("text", "")).split()) or NO_LEXICAL
+        lines.append(f"[{s['start']:.2f}-{s['end']:.2f}s] {text}")
+    return "\n".join(lines)
+
+
+def user_state_line(sample: Sample, gap: float = USER_CHUNK_GAP_S) -> str:
+    """One line on what the USER's voice is doing in the window (payload v2).
+
+    'User speech state: user silent for the whole window [9.34, 10.43]; was speaking until 9.23s
+    (mid-turn pause); resumes at 10.41s (0.02s before the window ends).'
+    """
+    segs = words_to_segments(sample.user_words, gap=gap)
+    ds, de, end = sample.dynamic_start_s, sample.dynamic_end_s, sample.duration_s
+    if not segs:
+        return f"User speech state: no user speech transcribed anywhere in the clip (window [{ds:.2f}, {de:.2f}])."
+    frac = activity_fraction(segs, ds, de)
+    if frac <= 0.0:
+        state = f"user silent for the whole window [{ds:.2f}, {de:.2f}]"
+    elif frac >= 0.999:
+        state = f"user speaking throughout the window [{ds:.2f}, {de:.2f}]"
+    else:
+        state = f"user speaking for {frac * 100:.0f}% of the window [{ds:.2f}, {de:.2f}]"
+    bits = [state]
+    cur = speaking_at(segs, ds)
+    if cur is not None:
+        bits.append(f"speaking at window start (utterance {cur.start:.2f}-{cur.end:.2f}s)")
+    else:
+        prev = max((s.end for s in segs if s.end <= ds), default=None)
+        if prev is None:
+            bits.append("has not spoken before the window")
+        else:
+            bits.append(f"was speaking until {prev:.2f}s ({ds - prev:.2f}s before the window)")
+    floor = cur.end if cur is not None else ds
+    nxt = min((s.start for s in segs if s.start > ds and s.start >= floor), default=None)
+    if nxt is None:
+        bits.append("no further user speech after the window" if end - de > 0.5 else "clip ends with the window")
+    elif nxt <= de:
+        bits.append(f"user speaks again at {nxt:.2f}s, inside the window")
+    else:
+        bits.append(f"next user speech starts at {nxt:.2f}s ({nxt - de:.2f}s after the window ends)")
+    return "User speech state: " + "; ".join(bits) + "."
+
+
+def _ev_text(ev: dict, key: str, limit: int = 110) -> str:
+    text = " ".join(str(ev.get(key) or "").split())
+    if not text:
+        return ""
+    if len(text) <= limit:
+        return f'"{text}"'
+    tail = text[-(limit - 3):]
+    cut = tail.find(" ")                      # start at a word boundary
+    return f'"...{tail[cut + 1:] if 0 <= cut < len(tail) // 2 else tail.lstrip()}"'
+
+
+def _ev_event(sample: Sample, ev: dict, key: str = "event") -> tuple[str, str]:
+    """(kind + note, clip-time span) of a mined nonverbal event; raw-file seconds are rebased with `t0`."""
+    e = ev.get(key)
+    if not isinstance(e, dict):
+        return "", ""
+    kind = str(e.get("kind", "")).replace("_", " ")
+    note = " ".join(str(e.get("note") or "").split())
+    what = f"{kind} ({note})" if note else kind
+    t0 = float(sample.source_meta.get("t0") or 0.0)
+    try:
+        a, b = float(e["start"]) - t0, float(e["end"]) - t0
+    except (KeyError, TypeError, ValueError):
+        return what, ""
+    return what, f"{a:.2f}-{b:.2f}s"
+
+
+def cue_line(sample: Sample) -> str | None:
+    """'Mined cue: ...' --- the specific user behaviour the clip was selected for (payload v2).
+
+    Built from `sample.source_meta["evidence"]` written by the WS2 miners; None when there is no
+    usable evidence (e.g. NVIDIA samples). Describes the USER's cue only --- never what the human
+    partner did next, so the line is identical for GT and model runs.
+    """
+    meta = sample.source_meta or {}
+    ev = meta.get("evidence") or {}
+    rule = str(meta.get("mining_rule") or ev.get("rule") or "")
+    if not rule or not ev:
+        return None
+    ds, de = sample.dynamic_start_s, sample.dynamic_end_s
+    win = f"t={ds:.2f}s to t={de:.2f}s"
+    gap = ev.get("gap_s")
+    if rule in ("pause_handling", "gaze_avoidance_with_pause"):
+        before, after = _ev_text(ev, "text_before"), _ev_text(ev, "text_after")
+        parts = [f"the user pauses mid-turn{f' for {float(gap):.2f}s' if gap else ''} ({win}), NOT finished speaking"]
+        if before:
+            parts.append(f"last words before the pause: {before}")
+        if after:
+            parts.append(f"resumes with: {after}")
+        if rule == "gaze_avoidance_with_pause":
+            go = ev.get("gaze_overlap_s")
+            parts.insert(1, "looks away from the partner during the pause"
+                         + (f" (gaze-away overlaps the pause by {float(go):.2f}s)" if go else ""))
+        return "Mined cue: " + "; ".join(parts) + "."
+    if rule == "laughter_p":
+        said = _ev_text(ev, "b_text_before")
+        dur = ev.get("laugh_s")
+        s = f"the user laughs{f' ({float(dur):.1f}s)' if dur else ''} at t={ds:.2f}s"
+        s += f", right after the agent said {said}" if said else ", in reaction to what the agent just said"
+        return f"Mined cue: {s} (positive feedback, not a turn request)."
+    if rule == "laughter_g":
+        own = _ev_text(ev, "a_text")
+        return (f"Mined cue: the user laughs at t={ds:.2f}s during their own turn"
+                + (f" ({own})" if own else "") + "; the agent is the listener.")
+    if rule == "verbal_backchanneling":
+        bc, dur = _ev_text(ev, "backchannel_text"), ev.get("backchannel_s")
+        return (f"Mined cue: the user holds the floor and the window ({win}) is where a listener would drop a short "
+                f"backchannel{f' (the human partner-side token here was {bc}' if bc else ''}"
+                + (f", {float(dur):.2f}s)" if bc and dur else (")" if bc else "")) + ".")
+    if rule == "verbal_interruption":
+        a_text, b_text = _ev_text(ev, "a_text"), _ev_text(ev, "b_text")
+        s = f"the user starts talking over the agent at t={ds:.2f}s"
+        if a_text:
+            s += f" with {a_text}"
+        if b_text:
+            s += f", while the agent was mid-sentence ({b_text})"
+        return f"Mined cue: {s}; the user holds the floor afterwards."
+    if rule == "turn_taking":
+        a_text = _ev_text(ev, "a_text")
+        q = " (a question)" if ev.get("ends_with_question") else ""
+        s = f"the user finishes a turn{q} at t={ds:.2f}s"
+        if a_text:
+            s += f" with {a_text}"
+        return f"Mined cue: {s} and offers the floor; the handoff window is {win}."
+    what, span = _ev_event(sample, ev)
+    at = f" at {span}" if span else f" at {win}"
+    if rule in ("nv_backchanneling_p", "nv_backchanneling_g"):
+        who = "the user, listening," if rule.endswith("_p") else "the user is mid-turn and a listener"
+        return (f"Mined cue: {who} {what or 'nods'}{at} as listener feedback"
+                + (" without taking the floor; the agent is the one talking." if rule.endswith("_p")
+                   else " is expected to nod/smile without taking the floor."))
+    if rule in ("face_emotion_display_p", "face_emotion_display_g", "emotion_matching"):
+        val = ev.get("valence")
+        v = {1: "positive", -1: "negative"}.get(val, "")
+        return f"Mined cue: the user shows a facial expression ({what or 'expression'}{', ' + v if v else ''}){at}."
+    if rule == "adaptor_handling":
+        mode = str(ev.get("mode") or "").replace("_", " ")
+        return (f"Mined cue: the user makes a self-directed, non-communicative gesture ({what or 'self-touch'}){at}"
+                + (f" while the {mode}" if mode else "") + "; it carries no conversational meaning.")
+    if rule == "nonverbal_interruption":
+        return (f"Mined cue: the user, still silent, makes an interruption gesture ({what or 'gesture'}){at} "
+                f"while the agent is mid-sentence; the user then takes the floor.")
+    return None
+
+
 def _quoted(block: str) -> str:
     return f'"""\n{block.strip()}\n"""'
 
 
 def build_user_message(sample: Sample, timing_json: dict) -> str:
-    """The F.5.1 evidence packet. `timing_json` is the per-clip dict written by `pipeline.score_timing`."""
+    """The F.5.1 evidence packet (payload v2). `timing_json` is the per-clip dict from `pipeline.score_timing`."""
     role = AgentRole(timing_json.get("agent_role") or sample.agent_role.value)
     ds, de = sample.dynamic_start_s, sample.dynamic_end_s
     lines = [
@@ -192,8 +360,12 @@ def build_user_message(sample: Sample, timing_json: dict) -> str:
         f"Agent role: {role.value}. {role_description(role)}",
         f"Dynamic event: t={ds:.2f}s to t={de:.2f}s",
         f"Clip duration: {sample.duration_s:.2f}s",
-        timing_json["overlap_line"],
     ]
+    cue = cue_line(sample)
+    if cue:
+        lines.append(cue)
+    lines.append(user_state_line(sample))
+    lines.append(timing_json["overlap_line"])
     if role is AgentRole.YIELDING and timing_json.get("yield_block"):
         lines.append(timing_json["yield_block"])
     caption = (sample.av_caption or "").strip() or NO_CAPTION
@@ -201,10 +373,20 @@ def build_user_message(sample: Sample, timing_json: dict) -> str:
     lines += [
         "AV caption (covers full clip including the dynamic event):",
         _quoted(caption),
+    ]
+    if caption != NO_CAPTION:
+        lines.append(CAPTION_CAVEAT)
+    lines += [
         "User speech (with timestamps):",
         _quoted(format_user_speech(sample)),
-        "Agent speech segments (times when agent was audible) --- partitioned by dynamic window:",
+        ("Agent speech segments (times when agent was audible) --- partitioned by dynamic window; "
+         "each span says what was said, or that it was a backchannel / wordless vocalisation:"),
         _quoted(timing_json["partition_block"]),
+    ]
+    agent_ts = format_agent_speech(timing_json)
+    if agent_ts is not None:
+        lines += ["Agent speech (with timestamps):", _quoted(agent_ts)]
+    lines += [
         "Agent speech transcript:",
         _quoted(transcript),
         "Rate on the 0-5 scale per the rubric above.",
@@ -400,6 +582,7 @@ def score_axis(sample: Sample, timing_json: dict, axis: Axis | str, judge: str =
         path.parent.mkdir(parents=True, exist_ok=True)
         d = result.to_dict()
         d.update(clip_id=sample.clip_id, dynamic_type=sample.dynamic_type.value, bucket=sample.bucket.value,
+                 payload_version=PAYLOAD_VERSION,
                  system_sha256=hashlib.sha256(system.encode()).hexdigest(), user_message=user)
         path.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
     return result

@@ -29,10 +29,11 @@ def make_sample(dynamic=DynamicType.PAUSE_HANDLING, bucket=Bucket.PERCEPTION, ca
     return Sample(**d)
 
 
-def make_timing(role="SILENT", transcript="Oh, no worries, take your time.", yield_block=None) -> dict:
+def make_timing(role="SILENT", transcript="Oh, no worries, take your time.", yield_block=None, segments=None) -> dict:
     return {
         "agent_role": role,
         "transcript": transcript,
+        **({"segments": segments} if segments is not None else {}),
         "overlap_line": "Agent in-window speech: 0.00s (no segments overlap [4.00, 7.00])",
         "partition_block": ("-- PRE-DYNAMIC (0.00 -> 4.00s) -- active 0.00s of 4.00s (0%)\n"
                             "-- DYNAMIC WINDOW (4.00 -> 7.00s) -- active 0.00s of 3.00s (0%)\n"
@@ -55,13 +56,132 @@ def test_payload_has_role_overlap_partition_caption():
     msg = judge.build_user_message(make_sample(), make_timing())
     assert msg.startswith("Category: Pause Handling\nBucket: perception\nAgent role: SILENT. ")
     assert judge.role_description(AgentRole.SILENT) in msg
-    assert "Dynamic event: t=4.00s to t=7.00s\nClip duration: 10.00s\n" in msg
+    assert "Dynamic event: t=4.00s to t=7.00s\nClip duration: 10.00s\nUser speech state: " in msg
     assert "\nAgent in-window speech: 0.00s (no segments overlap [4.00, 7.00])\n" in msg
     assert "-- DYNAMIC WINDOW (4.00 -> 7.00s) --" in msg and "-- PRE-DYNAMIC" in msg and "-- POST-DYNAMIC" in msg
-    assert f'AV caption (covers full clip including the dynamic event):\n"""\n{CAPTION}\n"""' in msg
+    assert f'AV caption (covers full clip including the dynamic event):\n"""\n{CAPTION}\n"""\n{judge.CAPTION_CAVEAT}\n' in msg
     assert 'Agent speech transcript:\n"""\nOh, no worries, take your time.\n"""' in msg
     assert msg.endswith("Rate on the 0-5 scale per the rubric above.")
     assert "Yield analysis:" not in msg
+    assert "Mined cue:" not in msg                      # no mining evidence on the synthetic sample
+    assert "Agent speech (with timestamps):" not in msg  # no segments in make_timing()
+
+
+# --- payload v2 additions -------------------------------------------------------------
+
+def test_user_state_line_pause_and_variants():
+    # default sample: user talks 0.0-1.2, silent through [4, 7], resumes at 7.2
+    line = judge.user_state_line(make_sample())
+    assert line == ("User speech state: user silent for the whole window [4.00, 7.00]; was speaking until 1.20s "
+                    "(2.80s before the window); next user speech starts at 7.20s (0.20s after the window ends).")
+    # speaking at window start and throughout
+    s = make_sample(user_words=[Word("a", 3.0, 8.0)])
+    assert judge.user_state_line(s) == ("User speech state: user speaking throughout the window [4.00, 7.00]; "
+                                        "speaking at window start (utterance 3.00-8.00s); no further user speech "
+                                        "after the window.")
+    # partial overlap, speaks again inside the window
+    s = make_sample(user_words=[Word("a", 4.5, 5.0), Word("b", 6.0, 6.5)])
+    line = judge.user_state_line(s)
+    assert line.startswith("User speech state: user speaking for 33% of the window [4.00, 7.00]; has not spoken before")
+    assert line.endswith("has not spoken before the window; user speaks again at 4.50s, inside the window.")
+    assert judge.user_state_line(make_sample(user_words=[])).startswith("User speech state: no user speech transcribed")
+
+
+def test_format_agent_speech_marks_wordless_regions():
+    segs = [{"start": 5.8, "end": 6.78, "text": "Yeah, you pay me.", "n_words": 4},
+            {"start": 0.0, "end": 2.17, "text": "Can you  pay me a compliment?", "n_words": 6},
+            {"start": 8.0, "end": 9.08, "text": "", "n_words": 0}]
+    assert judge.format_agent_speech({"segments": segs}) == (
+        "[0.00-2.17s] Can you pay me a compliment?\n[5.80-6.78s] Yeah, you pay me.\n"
+        f"[8.00-9.08s] {judge.NO_LEXICAL}")
+    assert judge.format_agent_speech({}) is None and judge.format_agent_speech({"segments": []}) is None
+    msg = judge.build_user_message(make_sample(), make_timing(segments=segs))
+    assert 'Agent speech (with timestamps):\n"""\n[0.00-2.17s] Can you pay me a compliment?' in msg
+    assert msg.index("Agent speech (with timestamps):") < msg.index("Agent speech transcript:")
+    assert msg.count("[no speech]") == 0
+    # wordless-only run: timestamped block says non-lexical, plain transcript says [no speech] exactly once
+    msg = judge.build_user_message(make_sample(), make_timing(transcript="", segments=[segs[2]]))
+    assert msg.count("[no speech]") == 1 and msg.count(judge.NO_LEXICAL) == 1
+
+
+def _meta(rule, t0=0.0, **ev):
+    return {"mining_rule": rule, "t0": t0, "evidence": {"rule": rule, **ev}}
+
+
+def test_cue_line_dialogue_rules():
+    s = make_sample(source_meta=_meta("pause_handling", gap_s=1.09, text_before="I know, like, you get anxious and stuff.",
+                                      text_after="But that's why I like afternoon sessions."))
+    assert judge.cue_line(s) == (
+        'Mined cue: the user pauses mid-turn for 1.09s (t=4.00s to t=7.00s), NOT finished speaking; last words before '
+        'the pause: "I know, like, you get anxious and stuff."; resumes with: "But that\'s why I like afternoon sessions.".')
+    g = make_sample(dynamic=DynamicType.GAZE_AVOIDANCE_WITH_PAUSE,
+                    source_meta=_meta("gaze_avoidance_with_pause", gap_s=1.2, gaze_overlap_s=1.2, text_before="so"))
+    assert "looks away from the partner during the pause (gaze-away overlaps the pause by 1.20s)" in judge.cue_line(g)
+    la = make_sample(dynamic=DynamicType.LAUGHTER, source_meta=_meta("laughter_p", laugh_s=2.5, b_text_before="Frisbee."))
+    assert judge.cue_line(la) == ('Mined cue: the user laughs (2.5s) at t=4.00s, right after the agent said "Frisbee." '
+                                  "(positive feedback, not a turn request).")
+    lg = make_sample(dynamic=DynamicType.LAUGHTER, bucket=Bucket.GENERATION,
+                     source_meta=_meta("laughter_g", laugh_s=1.0, a_text="bench press, squats. Frisbee"))
+    assert judge.cue_line(lg).startswith('Mined cue: the user laughs at t=4.00s during their own turn ("bench press')
+    vi = make_sample(dynamic=DynamicType.VERBAL_INTERRUPTION, bucket=Bucket.GENERATION,
+                     source_meta=_meta("verbal_interruption", a_text="But that's why", b_text="so if I have to", b_stop_s=0.99))
+    line = judge.cue_line(vi)
+    assert line == ('Mined cue: the user starts talking over the agent at t=4.00s with "But that\'s why", while the agent '
+                    'was mid-sentence ("so if I have to"); the user holds the floor afterwards.')
+    assert "0.99" not in line                       # never leak what the human partner did next
+    tt = make_sample(dynamic=DynamicType.TURN_TAKING, bucket=Bucket.GENERATION,
+                     source_meta=_meta("turn_taking", a_text="Did you have dreams?", ends_with_question=True))
+    assert judge.cue_line(tt) == ('Mined cue: the user finishes a turn (a question) at t=4.00s with "Did you have dreams?" '
+                                  "and offers the floor; the handoff window is t=4.00s to t=7.00s.")
+    vb = make_sample(dynamic=DynamicType.VERBAL_BACKCHANNELING, bucket=Bucket.GENERATION,
+                     source_meta=_meta("verbal_backchanneling", backchannel_text="Yeah.", backchannel_s=0.32))
+    assert judge.cue_line(vb).endswith('(the human partner-side token here was "Yeah.", 0.32s).')
+    # long evidence text is cut at a word boundary from the end
+    long = make_sample(source_meta=_meta("pause_handling", text_before="word " * 60 + "anxious and stuff."))
+    assert '"...word word word' in judge.cue_line(long) and "...ord" not in judge.cue_line(long)
+    assert judge.cue_line(make_sample()) is None
+    assert judge.cue_line(make_sample(source_meta={"mining_rule": "pause_handling"})) is None
+    assert judge.cue_line(make_sample(source_meta=_meta("some_future_rule", x=1))) is None
+
+
+def test_cue_line_nonverbal_rules_rebase_event_times():
+    ev = {"kind": "self_touch", "start": 19.6, "end": 20.2, "note": "adjusts pants", "source": "gemini"}
+    s = make_sample(dynamic=DynamicType.ADAPTOR_HANDLING, dynamic_start_s=18.6, dynamic_end_s=19.2, duration_s=30.0,
+                    source_meta=_meta("adaptor_handling", t0=1.0, event=ev, mode="partner_speaking"))
+    assert judge.cue_line(s) == ("Mined cue: the user makes a self-directed, non-communicative gesture "
+                                 "(self touch (adjusts pants)) at 18.60-19.20s while the partner speaking; "
+                                 "it carries no conversational meaning.")
+    nod = {"kind": "nod", "start": 17.33, "end": 18.03, "note": "", "source": "movement"}
+    p = make_sample(dynamic=DynamicType.NONVERBAL_BACKCHANNELING, source_meta=_meta("nv_backchanneling_p", t0=1.0, event=nod))
+    assert judge.cue_line(p) == ("Mined cue: the user, listening, nod at 16.33-17.03s as listener feedback without "
+                                 "taking the floor; the agent is the one talking.")
+    g = make_sample(dynamic=DynamicType.NONVERBAL_BACKCHANNELING, bucket=Bucket.GENERATION,
+                    source_meta=_meta("nv_backchanneling_g", t0=1.0, event=nod))
+    assert "is expected to nod/smile without taking the floor" in judge.cue_line(g)
+    sm = {"kind": "smile", "start": 5.0, "end": 5.5, "note": "", "source": "gemini"}
+    e = make_sample(dynamic=DynamicType.EMOTION_MATCHING, bucket=Bucket.GENERATION,
+                    source_meta=_meta("emotion_matching", t0=1.0, event=sm, valence=1))
+    assert judge.cue_line(e) == "Mined cue: the user shows a facial expression (smile, positive) at 4.00-4.50s."
+    f = make_sample(dynamic=DynamicType.FACE_EMOTION_DISPLAY,
+                    source_meta=_meta("face_emotion_display_p", t0=48.514, event={"kind": "expression_neg", "start": 60.93, "end": 62.3}))
+    assert judge.cue_line(f) == "Mined cue: the user shows a facial expression (expression neg) at 12.42-13.79s."
+    ni = make_sample(dynamic=DynamicType.NONVERBAL_INTERRUPTION,
+                     source_meta=_meta("nonverbal_interruption", t0=171.218, event={"kind": "point", "start": 184.0, "end": 184.5, "note": "points at B"}))
+    assert judge.cue_line(ni) == ("Mined cue: the user, still silent, makes an interruption gesture (point (points at B)) "
+                                  "at 12.78-13.28s while the agent is mid-sentence; the user then takes the floor.")
+    # event without times falls back to the window
+    nt = make_sample(dynamic=DynamicType.ADAPTOR_HANDLING, source_meta=_meta("adaptor_handling", event={"kind": "self_touch"}))
+    assert "(self touch) at t=4.00s to t=7.00s;" in judge.cue_line(nt)
+
+
+def test_cue_and_state_lines_sit_between_duration_and_overlap():
+    s = make_sample(source_meta=_meta("pause_handling", gap_s=3.0))
+    msg = judge.build_user_message(s, make_timing())
+    i_dur, i_cue, i_state, i_ov = (msg.index(x) for x in ("Clip duration:", "Mined cue:", "User speech state:",
+                                                          "Agent in-window speech:"))
+    assert i_dur < i_cue < i_state < i_ov
+    # the caveat is omitted together with the caption
+    assert judge.CAPTION_CAVEAT not in judge.build_user_message(make_sample(caption=""), make_timing())
 
 
 def test_user_speech_grouped_into_utterances():
