@@ -1,0 +1,11 @@
+run,provider,mode,dynamic_type,n,Fluency,Fluency_lo,Fluency_hi,Fluency_n,Conv. Flow,Conv. Flow_lo,Conv. Flow_hi,Conv. Flow_n,Grounding,Grounding_lo,Grounding_hi,Grounding_n,Overall,Overall_lo,Overall_hi,Overall_n,TOR-Align %,TOR-Align %_lo,TOR-Align %_hi,TOR-Align %_n,Latency ms,Latency ms_lo,Latency ms_hi,Latency ms_n
+gt,human_gt,av,Laughter,20,4.0,3.5,4.4,10,,,,0,3.4,2.9,3.9,10,3.7,3.3,4.05,10,,,,0,,,,0
+gt,human_gt,av,Pause Handling,10,4.5,3.6,5.0,10,4.6,4.0,5.0,10,,,,0,4.55,3.8,5.0,10,100.0,100.0,100.0,10,1016.0,1000.0,1032.0,2
+gt,human_gt,av,Turn-taking,10,,,,0,,,,0,,,,0,,,,0,100.0,100.0,100.0,10,632.0,456.0,1032.0,10
+gt,human_gt,av,Verbal Backchanneling,10,,,,0,,,,0,,,,0,,,,0,100.0,100.0,100.0,10,304.0,270.0,304.0,10
+gt,human_gt,av,Verbal Interruption,10,,,,0,,,,0,,,,0,,,,0,100.0,100.0,100.0,10,635.5,516.0,900.0,10
+random,random,av,Laughter,20,2.0,1.2,2.8024999999999975,10,,,,0,2.3,2.0,2.7,10,2.15,1.7,2.6,10,,,,0,,,,0
+random,random,av,Pause Handling,10,3.1,1.6,4.5,10,3.4,2.0,4.502499999999998,10,,,,0,3.25,1.75,4.5,10,80.0,50.0,100.0,10,196.0,0.0,2176.0,4
+random,random,av,Turn-taking,10,,,,0,,,,0,,,,0,,,,0,50.0,20.0,80.0,10,0.0,0.0,968.0,5
+random,random,av,Verbal Backchanneling,10,,,,0,,,,0,,,,0,,,,0,0.0,0.0,0.0,10,,,,0
+random,random,av,Verbal Interruption,10,,,,0,,,,0,,,,0,,,,0,10.0,0.0,30.0,10,2904.0,0.0,4133.0,4
