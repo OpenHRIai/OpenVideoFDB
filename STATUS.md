@@ -8,6 +8,14 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
 - 2026-10-15 — initial schema (WS0).
 - 2026-10-15 — `harness/base.py`: `AudioOut` gained `flush: bool = False` (barge-in: drop queued-unplayed audio at `t_received`; maps Gemini `server_content.interrupted`). Providers stamp `t_received` on their own clock (t=0 at first `push_audio`); streamer re-stamps on drain, keeps provider value as `t_agent` in events. (WS3)
 
+## HANDOFF 2026-10-16 (session 1 ended at usage limit — read this first)
+Committed and pushed through `8687876` (calibration v1). Work that was still in flight when the session ended lands on disk **uncommitted**; the next session must review, run tests, and commit each piece:
+1. **Judge payload v2 agent** — edits `ovfdb/score/{judge.py,segments.py,pipeline.py}`, `tests/test_judge_payload.py`, `docs/protocol.md`; re-scores `runs/gt` and `runs/random`; writes `results/calibration_v2.md`. Check: GT overall ≥ 4.0, random ≈ 2.1, GT Pause Handling flow ≥ 4.7. Commit as "WS5: judge payload v2".
+2. **WS2 day-2 nonverbal mining agent** — edits `ovfdb/mine/nonverbal.py` (+ small edits in mine/pipeline.py, verify.py, clip.py), `tests/test_nonverbal_rules.py` (one test was failing mid-flight: `test_nod_events_from_head_pitch_oscillation`), appends rows to `manifest/ovfdb_v0.jsonl`. Check `git diff --stat manifest/`; the original 60 rows must be unchanged. Commit as "WS2: nonverbal dynamics".
+3. **Model runs** (complete or near-complete, git-ignored): `runs/gemini_live_av` (54/54), `runs/openai_realtime_av` (54/54), `runs/gemini_live_a2a`, `runs/openai_realtime_a2a` (were in progress; re-run the same `ovfdb run … --out runs/<name>` command to fill missing clips — it skips existing ones). ASR caches for the two AV runs were being pre-computed.
+4. **Next steps in order**: (a) commit 1 and 2; (b) `uv run ovfdb score runs/<each model run> --manifest manifest/ovfdb_v0.jsonl` (gpt-4o, ≈$0.25/run); (c) `uv run ovfdb report runs/gt runs/random runs/gemini_live_av runs/gemini_live_a2a runs/openai_realtime_av runs/openai_realtime_a2a --per-dynamic --out results/v0_summary.md`; (d) if new nonverbal rows exist, re-run `ovfdb run` for gt/random/models on them (incremental) and re-score; (e) WS6b/6c (Tavus/Anam via Playwright, generation judge) and WS8 (README, manifest-only publish).
+5. Keys: GOOGLE_API_KEY and OPENAI_API_KEY in `.env`; no ANTHROPIC key yet (second judge untested). TAVUS/ANAM keys exist in fugubook's env if WS6b is attempted.
+
 ## Board
 | WS | Status | Session / owner | Last update | Notes / blockers |
 |----|--------|-----------------|-------------|------------------|
@@ -17,7 +25,7 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
 | WS3 harness (Gemini Live) | done | agent (session 1) | 2026-10-15 | streamer/recorder/human_gt/random/gemini_live; live smoke OK on `gemini-3.1-flash-live-preview` (AV + a2a), drift < 40 ms, no errors. `scripts/smoke_gemini_live.py` |
 | WS4 scoring: ASR + timing | done | agent (session 1) | 2026-10-15 | segments/timing/asr/pipeline; 31 tests; faster-whisper small.en int8 ≈ 8× RT. `timing.json` carries all judge blocks except caption/user words |
 | WS5 judge + calibration | judge done; calibration pending | agent (session 1) | 2026-10-15 | rubrics verbatim, judge (gpt-4o/claude/gemini backends), report w/ bootstrap CIs; gpt-4o good=5 / bad=1 on synthetic Pause Handling. ≈$0.01/clip. Calibration needs WS2 manifest |
-| WS6 providers: OpenAI RT, Tavus/Anam, gen judge | 6a done; 6b/6c todo | agent (session 1) | 2026-10-15 | openai_realtime provider live-verified (gpt-realtime, -mini; AV via input_image items, 1 fps). Tavus/Anam + generation judge still todo |
+| WS6 providers: OpenAI RT, Tavus/Anam, gen judge | 6a done; 6b/6c todo (keys needed in .env) | agent (session 1) | 2026-10-15 | openai_realtime provider live-verified (gpt-realtime, -mini; AV via input_image items, 1 fps). Tavus/Anam + generation judge still todo |
 | WS7 NVIDIA adapter | blocked (external) | — | 2026-10-15 | access requested 2026-10-15, awaiting approval; **not on the critical path** — all other WS run on Seamless |
 | WS8 report + publish | todo | — | — | last |
 
