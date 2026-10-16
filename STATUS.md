@@ -8,47 +8,43 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
 - 2026-10-15 — initial schema (WS0).
 - 2026-10-15 — `harness/base.py`: `AudioOut` gained `flush: bool = False` (barge-in: drop queued-unplayed audio at `t_received`; maps Gemini `server_content.interrupted`). Providers stamp `t_received` on their own clock (t=0 at first `push_audio`); streamer re-stamps on drain, keeps provider value as `t_agent` in events. (WS3)
 
-## HANDOFF 2026-10-16 (session 2) — read this first
-Committed and pushed through the commits below. Everything on disk under `runs/` is git-ignored.
-1. **Done this session.** WS2 nonverbal mining committed (`120a190`; +58 rows / 56 clips, day-1 rows
-   unchanged, 150 tests pass). Judge payload v2 committed (`d1bedc4`, `1d4adaf`; docs/protocol.md §5) and
-   calibrated: GT 4.12 / random 2.70 overall, GT Pause flow 4.6, GT Laughter fluency 4.0
-   (`results/calibration_v2.md`, notes at the bottom). Model runs judged with payload v2 (gpt-4o,
-   ≈$0.47/run on all rows): day-1 rows gemini_live_av 3.45, openai_realtime_av 3.50, gemini_live_a2a 3.68,
-   openai_realtime_a2a 2.80 (`results/v0_summary.md`). The a2a runs were judged against the 60 day-1 rows only (they also hold 10
-   nonverbal clips that gt/random/av runs lack; a day-1 manifest subset = `head -60 manifest/ovfdb_v0.jsonl`).
-2. **Finding — caption speaker swap.** Gemini's AV caption lip-reads a mixed audio track and attributes
-   speech to the wrong pane for whole pairs (`V00_S0314_*`: 3 clearly swapped, 6 mixed of 37 decidable
-   clips). Payload v2 adds a caveat + timestamped agent transcript, which recovered GT Laughter fluency
-   (2.9 → 4.0). Proper fix (WS2, `ovfdb/mine/prompts.py:av_caption`): put both channels' timestamped
-   Seamless transcripts in the caption prompt and ask only for visual behaviour; re-caption 110 clips
-   (≈$0.5 gemini-2.5-flash) and re-judge (≈$1.6 for 6 runs; Pause rows re-judge too since the caption is
-   in the payload).
-3. **Known judge limits.** GT Laughter grounding 3.4 (paper ≈ 4.2): "on-topic but flat in tone" — the
-   judge cannot hear register. Candidate fix: run `ovfdb/mine/laughter.py` on `agent.wav` and add agent
-   laugh spans to the payload. Random scores 2.7 (not 2.1) because wordless spans are no longer read as
-   talk-over for anyone; GT–random gap 1.4.
-3b. **Caveat — GT timing is circular on day-1 dynamics**: mining rules condition on the partner's response
-   (see docs/protocol.md §10), so human-reference TOR-Align = 100 % by construction (paper 90 % / 78 %). To fix:
-   re-mine with user-cue-only windows (fixed post-cue window) — a manifest change, so decide before publishing.
-4. **Nonverbal rows done too** (all six runs on 110 clips / 118 rows, judged; `results/v0_summary_all.md`):
-   GT 4.27 / random 2.47; models 3.36–3.69; a2a ≥ av on every nonverbal dynamic (video not exploited);
-   Nonverbal Interruption has only 2 rows; Adaptor grounding is trivially 5.0 for everyone (rubric).
-   **Next steps in order**: (a) mine more Nonverbal Interruption (+ Emotion Matching P) rows;
-   (b) caption v2 (item 2) and re-judge; (c) WS6b/6c (Tavus/Anam via Playwright, generation judge —
-   the 24 generation nonverbal rows have no judge yet); (d) WS8 README + manifest-only publish;
-   (e) optional second judge (needs ANTHROPIC_API_KEY) for agreement numbers via `report.agreement`.
-4b. **Human review UI** (`ovfdb review --manifest manifest/ovfdb_v1.jsonl`, `ovfdb/review/app.py`, stdlib
-   server on localhost): plays each clip with the window marked, shows cue / evidence / VLM verdict / both
-   speakers' words; accept / reject / unsure / fix window with keyboard shortcuts. Decisions →
-   `data/mining/review_<manifest>.jsonl`; `ovfdb review-apply` writes `<manifest>_reviewed.jsonl`.
-5. **Notation**: result tables follow the NVIDIA project page (Table 1): Model names as there, Setting =
-   <input>2<output> (AV2A / A2A / AV2AV / A2AV), axes Fluency / Conv. Flow / Vis. Ground. / Overall, Timing =
-   "TOR-Align % / median latency ms". Latency counts an agent already talking at the window start as 0 ms
-   (hence random ≈ 0 ms); read it with TOR-Align. `report.MODEL_NAMES` / `OUTPUT_MODALITY` extend it.
-6. Keys: GOOGLE_API_KEY and OPENAI_API_KEY in `.env`; no ANTHROPIC key yet. TAVUS/ANAM keys exist in
-   fugubook's env if WS6b is attempted. Pre-existing lint nit: `ovfdb/schema.py` UP035 (shared contract,
-   left alone).
+## HANDOFF 2026-10-16 (session 2, evening) — read this first
+**Direction change:** NVIDIA VideoFDB dataset access was approved (HF, gated). Work continues on the real
+dataset (WS7 adapter → runs → scoring). The Seamless-derived track is **parked** in the state below.
+
+### Seamless track — state when parked
+- **Manifest v0** (`manifest/ovfdb_v0.jsonl`, 118 rows / 110 clips, day-1 + nonverbal): fully run and judged for
+  gt / random / gemini_live {av,a2a} / openai_realtime {av,a2a}; tables in `results/v0_summary*.md`. Known
+  flaw: day-1 windows were selected using the partner's reaction → human-reference timing 100 % by
+  construction (see docs/protocol.md §10).
+- **Manifest v1** (`manifest/ovfdb_v1.jsonl`, 60 rows, day-1 only, user-cue-only rules, `ovfdb mine --tag v1`):
+  human-reviewed with the annotator page (`ovfdb review`; decisions in `manifest/reviews/ovfdb_v1.jsonl`,
+  applied in `manifest/ovfdb_v1_reviewed.jsonl`: 48 accept / 7 reject / 1 unsure / 4 unreviewed). Human
+  reference + random run and timed in `runs_v1/` (timing only, no judge):
+  Pause 90 % (paper 90 %), Turn-taking 100 % / 360 ms (paper 100 % / 640), Verbal Interruption 71 % / 1052 ms
+  (paper 70 % / 960), Verbal Backchanneling 14 % (paper 69 %) — see below. No model runs on v1 yet.
+- **Open decisions (user):** (1) Verbal Backchanneling — keep user-only breath slots (human 14 %; at a
+  mid-story breath real listeners say "mhm" only 7–9 % of the time over 150 slots) or anchor this one dynamic
+  on the partner's actual backchannel as the paper's annotators effectively did (disclose); recommended: anchor.
+  (2) keep or drop the 4 unreviewed rows (`review-apply --drop-unreviewed`).
+- **To do if resumed:** laughter detector bleed fix (partner's laugh on the user's mic was attributed to the
+  user in 2 reviewed clips: keep a laugh only if the user's channel is louder than the partner's over the span);
+  top up Laughter-G (6/10), Laughter-P (8/9), Verbal Backchanneling (7/10) with the fixed rules and re-review;
+  then model runs on v1 (≈1 h streaming + ≈$1 judge per 4 configs); caption v2 (per-channel transcripts in
+  the caption prompt; current captions sometimes swap USER/PARTNER speech); nonverbal day-2 rules also
+  condition on the partner (other_speaking_after, b_reply_lag, partner_event, b_stop) — same fix needed.
+- Tooling that carries over to NVIDIA: scoring pipeline (payload v2, calibrated), report in project-page
+  notation (`--manifest/--rows` filters), `ovfdb review` annotator page (works on any manifest with
+  `user_video_path`; needs `partner_file_id/t0/t1` in source_meta only for the partner-words panel).
+
+### NVIDIA track — next steps
+1. WS7 (`plans/WS7-nvidia-adapter.md`, `docs/data-sources.md`): load the gated HF dataset → `Sample`s
+   (ids pass through; `av_caption` = provided caption; `user_words` from provided ASR or whisper on the user
+   audio; `agent_speaks_first` + `system_prompt` as shipped). Human GT = the partner channel as shipped.
+2. Run gt / random / gemini_live / openai_realtime on the NVIDIA clips (`ovfdb run <manifest> --out runs_nv/..`),
+   score with payload v2, report with `--manifest` — compare with the project page tables directly (same clips,
+   same windows, same human reference).
+3. Keys: GOOGLE_API_KEY / OPENAI_API_KEY in `.env`; HF token needed for the gated download (HF_TOKEN in `.env`).
 
 ## Board
 | WS | Status | Session / owner | Last update | Notes / blockers |
@@ -60,7 +56,7 @@ Committed and pushed through the commits below. Everything on disk under `runs/`
 | WS4 scoring: ASR + timing | done | agent (session 1) | 2026-10-15 | segments/timing/asr/pipeline; 31 tests; faster-whisper small.en int8 ≈ 8× RT. `timing.json` carries all judge blocks except caption/user words |
 | WS5 judge + calibration | done (payload v2 calibrated) | session 2 | 2026-10-16 | rubrics verbatim, judge (gpt-4o/claude/gemini backends), report w/ bootstrap CIs. Payload v2: GT 4.12 vs random 2.70; results/calibration_v2.md. ≈$0.013/row-axis |
 | WS6 providers: OpenAI RT, Tavus/Anam, gen judge | 6a done; 6b/6c todo (keys needed in .env) | agent (session 1) | 2026-10-15 | openai_realtime provider live-verified (gpt-realtime, -mini; AV via input_image items, 1 fps). Tavus/Anam + generation judge still todo |
-| WS7 NVIDIA adapter | blocked (external) | — | 2026-10-15 | access requested 2026-10-15, awaiting approval; **not on the critical path** — all other WS run on Seamless |
+| WS7 NVIDIA adapter | **in progress** (access approved 2026-10-16) | session 2 | 2026-10-16 | loader → Sample; then runs + scoring on the real clips |
 | WS8 report + publish | results tables done; README/publish todo | session 2 | 2026-10-16 | results/v0_summary.md (day-1 rows), results/v0_summary_all.md (all 118 rows) |
 
 ## Decisions log
