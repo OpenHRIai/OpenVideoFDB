@@ -49,8 +49,8 @@ dataset (WS7 adapter → runs → scoring). The Seamless-derived track is **park
   https://huggingface.co/datasets/OpenHRI/open-videofdb (manifests + card only). LinkedIn / X posts: user, from
   `docs/announcement.md`.
 - NVIDIA progress: adapter done; validation smoke test + human reference on the 60 test rows with a partner
-  channel match the paper (`results/nvidia_*.md`); random baseline on test running; **model runs on the 226
-  test rows not started** (≈1.5 h, ≈$25 API + $3 judge) — first thing after the release.
+  channel match the paper (`results/nvidia_*.md`); random baseline on all 226 test rows done (2.03 overall, 53 %;
+  `results/nvidia_test_baselines.md`); **model runs on the 226 test rows not started** (≈1.5 h, ≈$25 API + $3 judge) — first thing after the release.
 
 ### NVIDIA track — next steps
 1. WS7 (`plans/WS7-nvidia-adapter.md`, `docs/data-sources.md`): load the gated HF dataset → `Sample`s
