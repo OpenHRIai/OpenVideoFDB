@@ -305,15 +305,62 @@ def test_score_timing_pipeline(tmp_path, monkeypatch):
     monkeypatch.setattr(asr, "load_or_transcribe", lambda wav, **kw: words)
 
     summary = pipeline.score_timing(run_dir)
-    assert summary["n_clips"] == 2 and summary["n_timed"] == 1 and summary["skipped"] == []
+    assert summary["n_rows"] == 2 and summary["n_clips"] == 2 and summary["n_timed"] == 1
+    assert summary["skipped"] == [] and summary["manifest"] == str(manifest)
     assert summary["aggregate"]["Nonverbal Interruption"]["tor_alignment"] == 1.0
     assert summary["aggregate"]["Nonverbal Interruption"]["median_latency_ms"] == pytest.approx(1000.0)
-    t1 = json.loads((run_dir / "c1" / "timing.json").read_text())
+    assert [(r["clip_id"], r["bucket"]) for r in summary["rows"]] == [("c1", "perception"), ("c2", "perception")]
+    assert not (run_dir / "c1" / "timing.json").exists()        # no flat per-clip file any more
+    t1 = json.loads((run_dir / "c1" / "perception" / "timing.json").read_text())
     assert t1["timing_class"] == "yield-required" and t1["timing"]["passed"] is True
     assert t1["transcript"] == "so anyway I think" and len(t1["segments"]) == 1
     assert t1["overlap_line"].startswith("Agent in-window speech: 1.00s total across 1 segment(s)")
     assert t1["yield_block"].startswith("Yield analysis:\n") and t1["agent_role"] == "YIELDING"
-    t2 = json.loads((run_dir / "c2" / "timing.json").read_text())
+    t2 = json.loads((run_dir / "c2" / "perception" / "timing.json").read_text())
     assert t2["timing_class"] is None and t2["timing"] is None and t2["yield_block"] is None
     assert "-- PRE-DYNAMIC (0.00 -> 5.00s) --" in t2["partition_block"]
-    assert json.loads((run_dir / "timing_summary.json").read_text())["n_clips"] == 2
+    assert json.loads((run_dir / "timing_summary.json").read_text())["n_rows"] == 2
+
+
+def test_score_timing_scores_both_rows_of_a_shared_clip(tmp_path, monkeypatch):
+    """A clip present in both buckets (one run dir, one agent.wav) yields two scored rows."""
+    manifest = tmp_path / "manifest.jsonl"
+    base = {"conversation_id": "x", "dynamic_start_s": 5.0, "dynamic_end_s": 7.0, "duration_s": 20.0,
+            "user_audio_path": "u.wav", "user_video_path": "u.mp4"}
+    samples = [
+        Sample(clip_id="shared", bucket=Bucket.PERCEPTION, dynamic_type=DynamicType.LAUGHTER, **base),
+        Sample(clip_id="shared", bucket=Bucket.GENERATION, dynamic_type=DynamicType.LAUGHTER, **base),
+        Sample(clip_id="tt", bucket=Bucket.GENERATION, dynamic_type=DynamicType.TURN_TAKING, **base),
+        Sample(clip_id="missing", bucket=Bucket.PERCEPTION, dynamic_type=DynamicType.PAUSE_HANDLING, **base),
+    ]
+    write_manifest(samples, manifest)
+    run_dir = tmp_path / "runs" / "demo"
+    for cid in ("shared", "tt", "stray"):
+        d = run_dir / cid
+        d.mkdir(parents=True)
+        (d / "agent.wav").write_bytes(b"")
+        run = AgentRun(clip_id=cid, provider="fake", mode="av", agent_audio_path=str(d / "agent.wav"))
+        (d / "run.json").write_text(json.dumps(asdict(run)))
+    calls: list[str] = []
+
+    def fake_asr(wav, **kw):
+        calls.append(str(wav))
+        return [Word("so", 2.0, 2.3), Word("anyway", 2.4, 3.0), Word("I", 7.5, 7.6), Word("think", 7.7, 8.0)]
+
+    monkeypatch.setattr(asr, "load_or_transcribe", fake_asr)
+    summary = pipeline.score_timing(run_dir, manifest=str(manifest))
+    assert summary["n_rows"] == 3 and summary["n_clips"] == 2 and summary["n_timed"] == 1
+    assert [(r["clip_id"], r["bucket"]) for r in summary["rows"]] == [
+        ("shared", "perception"), ("shared", "generation"), ("tt", "generation")]
+    assert summary["skipped"] == [{"clip_id": "stray", "bucket": None,
+                                   "reason": f"clip not in manifest {manifest}"}]
+    for bucket in ("perception", "generation"):
+        t = json.loads((run_dir / "shared" / bucket / "timing.json").read_text())
+        assert t["clip_id"] == "shared" and t["bucket"] == bucket and t["transcript"] == "so anyway I think"
+    assert json.loads((run_dir / "tt" / "generation" / "timing.json").read_text())["timing_class"] == "smooth-handoff"
+    assert not (run_dir / "tt" / "perception").exists() and not (run_dir / "stray" / "perception").exists()
+    # ASR was asked once per row (the real asr caches agent.words.json at the clip level)
+    assert calls == [str(run_dir / "shared" / "agent.wav")] * 2 + [str(run_dir / "tt" / "agent.wav")]
+    # second pass reuses the per-row timing.json files
+    summary2 = pipeline.score_timing(run_dir, manifest=str(manifest))
+    assert len(calls) == 3 and summary2["rows"] == summary["rows"]

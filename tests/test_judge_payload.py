@@ -220,6 +220,9 @@ def test_pipeline_score_writes_judge_files(tmp_path, monkeypatch):
         make_sample(clip_id="c2", dynamic=DynamicType.LAUGHTER, dynamic_start_s=5.0, dynamic_end_s=7.0, duration_s=20.0),
         make_sample(clip_id="c3", dynamic=DynamicType.LAUGHTER, bucket=Bucket.GENERATION, dynamic_start_s=5.0,
                     dynamic_end_s=7.0, duration_s=20.0),
+        # c2 is in BOTH buckets: one run dir / agent.wav, two manifest rows
+        make_sample(clip_id="c2", dynamic=DynamicType.LAUGHTER, bucket=Bucket.GENERATION, dynamic_start_s=5.0,
+                    dynamic_end_s=7.0, duration_s=20.0),
     ]
     write_manifest(samples, manifest)
     run_dir = tmp_path / "runs" / "demo"
@@ -242,26 +245,34 @@ def test_pipeline_score_writes_judge_files(tmp_path, monkeypatch):
 
     monkeypatch.setattr(judge, "_call", fake_call)
     summary = pipeline.score(run_dir, judge="gpt-4o")
-    assert summary["n_clips"] == 3 and summary["n_judged"] == 2
-    assert [s["clip_id"] for s in summary["skipped"]] == ["c3"]
+    assert summary["n_rows"] == 4 and summary["n_clips"] == 3 and summary["n_judged"] == 2
+    assert [(s["clip_id"], s["bucket"]) for s in summary["skipped"]] == [("c3", "generation"), ("c2", "generation")]
+    assert [(r["clip_id"], r["bucket"]) for r in summary["rows"]] == [("c1", "perception"), ("c2", "perception")]
     assert summary["per_axis"]["fluency"] == {"mean": 4.0, "sd": pytest.approx(1.4142, abs=1e-3), "n": 2}
     assert summary["per_axis"]["semantic_grounding"]["n"] == 2 and summary["per_axis"]["conversational_flow"]["n"] == 1
     assert summary["per_dynamic"]["Laughter"]["overall"] == {"mean": 3.0, "sd": 0.0, "n": 1}
     assert summary["overall"]["mean"] == 4.0 and summary["usage"]["n_calls"] == 5
     assert summary["usage"]["est_cost_usd"] == pytest.approx(5 * (1000 * 2.5 + 50 * 10) / 1e6)
-    j1 = json.loads((run_dir / "c1" / "judge.json").read_text())
+    j1 = json.loads((run_dir / "c1" / "perception" / "judge.json").read_text())
     assert j1["judge"] == "gpt-4o" and j1["overall"] == 5.0 and set(j1["axes"]) == {
         "fluency", "conversational_flow", "semantic_grounding"}
+    assert j1["bucket"] == "perception"
     assert "Yield analysis:" in seen[0] and "Agent role: YIELDING." in seen[0]
-    assert (run_dir / "c1" / "judge" / "semantic_grounding_gpt-4o.json").exists()
-    assert not (run_dir / "c3" / "judge.json").exists()
+    assert (run_dir / "c1" / "perception" / "judge" / "semantic_grounding_gpt-4o.json").exists()
+    assert not (run_dir / "c1" / "judge.json").exists() and not (run_dir / "c1" / "timing.json").exists()
+    # the shared clip: perception row judged, generation row timed but not judged
+    assert (run_dir / "c2" / "perception" / "judge.json").exists()
+    assert (run_dir / "c2" / "generation" / "timing.json").exists()
+    assert not (run_dir / "c2" / "generation" / "judge.json").exists()
+    assert not (run_dir / "c3" / "generation" / "judge.json").exists()
+    assert (run_dir / "c3" / "generation" / "timing.json").exists()
     # second run is fully cached; a second judge is kept side by side in by_judge
     n_before = len(seen)
     s2 = pipeline.score(run_dir, judge="gpt-4o")
     assert len(seen) == n_before and s2["usage"] == {"prompt_tokens": 0, "completion_tokens": 0, "n_calls": 0,
                                                       "n_cached": 5, "est_cost_usd": 0.0}
     pipeline.score(run_dir, judge="claude-sonnet-4-6", axes="fluency")
-    j1 = json.loads((run_dir / "c1" / "judge.json").read_text())
+    j1 = json.loads((run_dir / "c1" / "perception" / "judge.json").read_text())
     assert j1["judge"] == "claude-sonnet-4-6" and set(j1["axes"]) == {"fluency"}
     assert set(j1["by_judge"]) == {"gpt-4o", "claude-sonnet-4-6"} and j1["by_judge"]["gpt-4o"]["overall"] == 5.0
     assert json.loads((run_dir / "judge_summary.json").read_text())["judge"] == "claude-sonnet-4-6"

@@ -10,19 +10,24 @@ import pytest
 from ovfdb.score import report
 
 
-def _clip(run_dir, cid, dyn, ratings: dict, passed=None, latency=None, judge="gpt-4o", provider="human_gt",
-          mode="av", second_judge: dict | None = None):
-    d = run_dir / cid
+def _clip(run_dir, cid, dyn, ratings: dict | None, passed=None, latency=None, judge="gpt-4o", provider="human_gt",
+          mode="av", second_judge: dict | None = None, bucket="perception"):
+    """One scored manifest row: `<run>/<cid>/<bucket>/{timing.json, judge.json, judge/}`."""
+    (run_dir / cid).mkdir(parents=True, exist_ok=True)
+    (run_dir / cid / "run.json").write_text(json.dumps({"clip_id": cid, "provider": provider, "mode": mode}))
+    d = run_dir / cid / bucket
     d.mkdir(parents=True, exist_ok=True)
     timing = None if passed is None else {"passed": passed, "takeover": 0, "expected_takeover": 0,
                                            "latency_ms": latency, "details": {}}
     (d / "timing.json").write_text(json.dumps({
-        "clip_id": cid, "provider": provider, "mode": mode, "bucket": "perception", "dynamic_type": dyn,
+        "clip_id": cid, "provider": provider, "mode": mode, "bucket": bucket, "dynamic_type": dyn,
         "timing_class": "stay-silent" if timing else None, "timing": timing}))
+    if ratings is None:                 # generation row: timing only, no perception judge
+        return
     axes = {a: {"rating": r, "analysis": "", "reasoning": ""} for a, r in ratings.items()}
     overall = sum(ratings.values()) / len(ratings)
     block = {"judge": judge, "axes": axes, "overall": overall}
-    (d / "judge.json").write_text(json.dumps({"clip_id": cid, "provider": provider, "mode": mode,
+    (d / "judge.json").write_text(json.dumps({"clip_id": cid, "provider": provider, "mode": mode, "bucket": bucket,
                                               "dynamic_type": dyn, **block, "by_judge": {judge: block}}))
     (d / "judge").mkdir(exist_ok=True)
     for a, r in ratings.items():
@@ -41,6 +46,9 @@ def runs(tmp_path):
           second_judge={"fluency": 2, "conversational_flow": 5})
     _clip(gt, "c", "Laughter", {"fluency": 5, "semantic_grounding": 4}, second_judge={"fluency": 5})
     _clip(gt, "d", "Adaptor Handling", {"fluency": 4, "semantic_grounding": 3}, passed=False, latency=None)
+    # "c" is also a generation row (same clip dir): timed, not judged
+    _clip(gt, "c", "Turn-taking", None, passed=True, latency=250.0, bucket="generation")
+    (gt / "a" / "timing.json").write_text("{}")             # stale flat file from the old layout: ignored
     rnd = tmp_path / "random"
     _clip(rnd, "a", "Pause Handling", {"fluency": 2, "conversational_flow": 1}, passed=False, latency=300.0,
           provider="random")
@@ -54,13 +62,13 @@ def runs(tmp_path):
 def test_summarise(runs):
     gt, rnd = runs
     df = report.summarise([gt, rnd])
-    assert list(df["provider"]) == ["human_gt", "random"] and list(df["n"]) == [4, 3]
+    assert list(df["provider"]) == ["human_gt", "random"] and list(df["n"]) == [5, 3]     # n = rows
     g = df.iloc[0]
-    assert g["Fluency"] == pytest.approx(4.5) and g["Conv. Flow"] == pytest.approx(4.5)
+    assert g["Fluency"] == pytest.approx(4.5) and g["Fluency_n"] == 4 and g["Conv. Flow"] == pytest.approx(4.5)
     assert g["Grounding"] == pytest.approx(3.5) and g["Grounding_n"] == 2
-    assert g["Overall"] == pytest.approx((4.5 + 4.5 + 4.5 + 3.5) / 4)
-    assert g["TOR-Align %"] == pytest.approx(200 / 3) and g["TOR-Align %_n"] == 3
-    assert g["Latency ms"] == 1200.0 and g["Latency ms_lo"] == g["Latency ms_hi"] == 1200.0
+    assert g["Overall"] == pytest.approx((4.5 + 4.5 + 4.5 + 3.5) / 4) and g["Overall_n"] == 4
+    assert g["TOR-Align %"] == pytest.approx(300 / 4) and g["TOR-Align %_n"] == 4
+    assert g["Latency ms"] == pytest.approx(725.0) and g["Latency ms_n"] == 2
     r = df.iloc[1]
     assert r["Fluency"] == pytest.approx(2.0) and r["TOR-Align %"] == pytest.approx(50.0) and r["Latency ms"] == 300.0
     for col in ("Fluency", "Conv. Flow", "Overall", "TOR-Align %"):
@@ -84,10 +92,13 @@ def test_bootstrap_ci_deterministic():
 def test_per_dynamic(runs):
     gt, rnd = runs
     df = report.per_dynamic([gt, rnd])
-    assert df["dynamic_type"].tolist() == ["Adaptor Handling", "Laughter", "Pause Handling", "Laughter", "Pause Handling"]
+    assert df["dynamic_type"].tolist() == ["Adaptor Handling", "Laughter", "Pause Handling", "Turn-taking",
+                                           "Laughter", "Pause Handling"]
     ph = df[(df["run"] == "gt") & (df["dynamic_type"] == "Pause Handling")].iloc[0]
     assert ph["n"] == 2 and ph["Conv. Flow"] == pytest.approx(4.5) and ph["TOR-Align %"] == 100.0
     assert math.isnan(ph["Grounding"])
+    tt = df[(df["run"] == "gt") & (df["dynamic_type"] == "Turn-taking")].iloc[0]
+    assert tt["n"] == 1 and math.isnan(tt["Fluency"]) and tt["TOR-Align %"] == 100.0 and tt["Latency ms"] == 250.0
 
 
 def test_agreement(runs):
@@ -106,9 +117,9 @@ def test_write_markdown_and_csv(runs, tmp_path):
     out = report.write([gt, rnd], per_dynamic=True, out=tmp_path / "results" / "summary.md")
     md = out.read_text()
     assert md.startswith("# OpenVideoFDB summary") and "| provider | mode | n | Fluency |" in md
-    assert "| human_gt | av | 4 | 4.50 [" in md and "| random | av | 3 | 2.00 [" in md
+    assert "| human_gt | av | 5 | 4.50 [" in md and "| random | av | 3 | 2.00 [" in md
     assert "## Per dynamic" in md and "| human_gt | av | Pause Handling | 2 |" in md
-    assert "1200 [1200, 1200]" in md and "—" in md          # latency CI; missing Grounding for pause-only
+    assert "725 [250, 1200]" in md and "—" in md           # latency CI; missing Grounding for pause-only
     assert (tmp_path / "results" / "summary.csv").exists()
     assert (tmp_path / "results" / "summary_per_dynamic.csv").exists()
     assert report.to_markdown(report.summarise([]), ["provider"]).startswith("_(no runs)_")
@@ -118,5 +129,7 @@ def test_load_run_selects_judge(runs):
     gt, _ = runs
     r = report.load_run(gt, judge="claude-sonnet-4-6")
     assert r["judge"] == "claude-sonnet-4-6" and all(c["axes"] == {} for c in r["clips"])
+    assert [(c["clip_id"], c["bucket"]) for c in r["clips"]] == [
+        ("a", "perception"), ("b", "perception"), ("c", "perception"), ("c", "generation"), ("d", "perception")]
     with pytest.raises(FileNotFoundError):
         report.load_run(gt / "missing")

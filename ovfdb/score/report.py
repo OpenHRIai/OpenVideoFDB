@@ -1,12 +1,12 @@
 """Table-1 style summaries over scored run directories (plans/WS5-judge.md).
 
-Inputs per run dir: `<clip>/judge.json` (written by `pipeline.score`) and
-`<clip>/timing.json` (WS4). `summarise` gives one row per run dir with the
-three perception axes, Overall (mean of each clip's available axes), TOR-Alignment
-% and median latency, each with a 95 % bootstrap CI over clips (1000 resamples,
-seed 0). `per_dynamic` breaks the same metrics down by dynamic (paper Table 11).
-`agreement` compares two judges' cached per-axis results (% within 1 point).
-`write` renders markdown + CSV.
+Inputs per run dir: `<clip>/<bucket>/judge.json` (written by `pipeline.score`) and
+`<clip>/<bucket>/timing.json` (WS4), one pair per manifest row = (clip_id, bucket).
+`summarise` gives one row per run dir with the three perception axes, Overall (mean
+of each row's available axes), TOR-Alignment % and median latency, each with a 95 %
+bootstrap CI over rows (1000 resamples, seed 0). `per_dynamic` breaks the same
+metrics down by dynamic (paper Table 11). `agreement` compares two judges' cached
+per-axis results (% within 1 point). `write` renders markdown + CSV.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ovfdb.schema import Axis
+from ovfdb.schema import Axis, Bucket
 
 N_BOOT = 1000
 SEED = 0
@@ -60,16 +60,29 @@ def _axes_from_judge(j: dict | None, judge: str | None) -> tuple[dict[str, float
     return axes, overall, block.get("judge", j.get("judge"))
 
 
+def iter_row_dirs(run_dir: Path):
+    """Yield (clip_dir, bucket, row_dir) for every `<clip>/<bucket>/` under `run_dir`, sorted."""
+    for d in sorted(p for p in run_dir.iterdir() if p.is_dir()):
+        for bucket in Bucket:
+            rd = d / bucket.value
+            if rd.is_dir():
+                yield d, bucket.value, rd
+
+
 def load_run(run_dir: str | Path, judge: str | None = None) -> dict:
-    """{"run", "provider", "mode", "judge", "clips": [{clip_id, dynamic_type, axes, overall, passed, latency_ms}]}."""
+    """{"run", "provider", "mode", "judge", "clips": [{clip_id, bucket, dynamic_type, axes, overall, passed, latency_ms}]}.
+
+    One entry per scored manifest row (`<clip>/<bucket>/`), so a clip present in both buckets
+    contributes two entries.
+    """
     run_dir = Path(run_dir)
     if not run_dir.is_dir():
         raise FileNotFoundError(run_dir)
     provider = mode = judge_name = None
     clips: list[dict] = []
-    for d in sorted(p for p in run_dir.iterdir() if p.is_dir()):
-        j = _read_json(d / "judge.json")
-        t = _read_json(d / "timing.json")
+    for d, bucket, rd in iter_row_dirs(run_dir):
+        j = _read_json(rd / "judge.json")
+        t = _read_json(rd / "timing.json")
         if j is None and t is None:
             continue
         src = t or j or {}
@@ -80,6 +93,7 @@ def load_run(run_dir: str | Path, judge: str | None = None) -> dict:
         timing = (t or {}).get("timing") or {}
         clips.append({
             "clip_id": src.get("clip_id", d.name),
+            "bucket": src.get("bucket", bucket),
             "dynamic_type": src.get("dynamic_type"),
             "axes": axes,
             "overall": overall,
@@ -175,15 +189,15 @@ def per_dynamic(run_dirs: Iterable[str | Path], *, judge: str | None = None, n_b
 
 
 def agreement(run_dir: str | Path, judge_a: str, judge_b: str) -> dict:
-    """Cross-judge agreement from `<clip>/judge/<axis>_<judge>.json` caches.
+    """Cross-judge agreement from `<clip>/<bucket>/judge/<axis>_<judge>.json` caches.
 
     {axis: {"n", "within_1", "exact", "mean_abs_diff", "mean_a", "mean_b"}, "overall": {...}} with
-    percentages in [0, 100]. Only clips/axes rated by both judges count.
+    percentages in [0, 100]. Only rows/axes rated by both judges count.
     """
     run_dir = Path(run_dir)
     diffs: dict[str, list[tuple[float, float]]] = {}
-    for d in sorted(p for p in run_dir.iterdir() if p.is_dir()):
-        jd = d / "judge"
+    for _, _, rd in iter_row_dirs(run_dir):
+        jd = rd / "judge"
         if not jd.is_dir():
             continue
         for axis, _ in AXIS_COLUMNS:
@@ -253,9 +267,10 @@ def write(run_dirs: Iterable[str | Path], per_dynamic: bool = False, out: str | 
     df = summarise(run_dirs, judge=judge, n_boot=n_boot, seed=seed)
     df.to_csv(out.with_suffix(".csv"), index=False)
     judges = sorted({str(j) for j in df.get("judge", pd.Series(dtype=object)).dropna()}) if not df.empty else []
-    note = (f"Judge: {', '.join(judges) or '—'}. Overall = mean of each clip's available perception axes. "
-            f"Brackets are 95 % bootstrap CIs over clips ({n_boot} resamples, seed {seed}). "
-            "TOR-Align % = fraction of timed clips whose takeover matches the expected class; latency is the median.")
+    note = (f"Judge: {', '.join(judges) or '—'}. n = manifest rows (clip, bucket) scored. "
+            "Overall = mean of each perception row's available judge axes. "
+            f"Brackets are 95 % bootstrap CIs over rows ({n_boot} resamples, seed {seed}). "
+            "TOR-Align % = fraction of timed rows whose takeover matches the expected class; latency is the median.")
     parts = [
         "# OpenVideoFDB summary",
         "",
