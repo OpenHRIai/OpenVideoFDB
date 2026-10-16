@@ -25,6 +25,7 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
 - 2026-10-15 — Perception bucket first; generation is a stretch (needs video-out agents).
 - 2026-10-15 — Seamless `naturalistic` split only (improvised uses actors).
 - 2026-10-15 — ASR: faster-whisper (paper: Parakeet 0.6B v2). Judge: GPT-4o primary (as paper) + Claude second judge for agreement. AV captioner: Gemini Flash (paper: Qwen3.5-397B + Nemotron-Omni).
+- 2026-10-15 — Publish manifest only (file_ids + timestamps + labels + prompts/captions) and a re-fetch/trim command; never re-host Seamless media. CC-BY-NC 4.0 allows it, but privacy exposure isn't worth it.
 - 2026-10-15 — Clip time origin = first user audio chunk sent to agent.
 
 ## Open questions

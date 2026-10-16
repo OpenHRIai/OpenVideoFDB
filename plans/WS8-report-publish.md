@@ -12,10 +12,17 @@
    (`docs/protocol.md` §10), how to run the three commands (`mine`, `run`,
    `score`), how to add a provider (implement `Agent`), licences, citation of
    both the VideoFDB paper and Seamless Interaction.
-3. HF dataset `<org>/open-videofdb` with `manifest/ovfdb_v0.jsonl`, trimmed
-   clips (`clips/<clip_id>/{user,partner}.{wav,mp4}`), the AV captions and
-   system prompts, README card with CC-BY-NC 4.0 + attribution. Script:
-   `scripts/publish_hf.py --repo <org>/open-videofdb`.
+3. **Manifest-only publication (decision 2026-10-15).** Publish
+   `manifest/ovfdb_v0.jsonl` (Seamless file_ids, raw t0/t1, windows, labels,
+   our system prompts and AV captions) to GitHub and as an HF dataset
+   `<org>/open-videofdb`, plus `ovfdb mine --from-manifest` that re-fetches
+   from Meta's public mirror and trims locally (WS1 `to_sample` is
+   deterministic). Do NOT re-host Seamless media: CC-BY-NC 4.0 would permit
+   it, but it adds participant-privacy exposure for no benefit (NVIDIA shows no
+   clip samples for the same reason). README card: CC-BY-NC 4.0 for the
+   manifest/captions, attribution to Meta Seamless Interaction, note that the
+   NC restriction applies to all derived data; code stays MIT.
+   Script: `scripts/publish_hf.py --repo <org>/open-videofdb`.
 4. GitHub repo public; tag `v0`.
 
 ## Acceptance
