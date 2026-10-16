@@ -148,8 +148,13 @@ class Work:
         return C.clip_id_for(self.user_id, self.clip_index)
 
 
-def process(work: Work, do_verify: bool, verify_cache: dict, counts: Counter) -> list[Sample]:
-    """Trim, verify, prompt, caption. Returns accepted Samples (0..n)."""
+def process(work: Work, do_verify: bool, verify_cache: dict, counts: Counter,
+            verify_log: Path = V.VERIFY_LOG) -> list[Sample]:
+    """Trim, verify, prompt, caption. Returns accepted Samples (0..n).
+
+    Day-1 dialogue dynamics (``V.USER_ONLY_KEYS``) are verified on the USER's own clip; the nonverbal
+    dynamics on the side-by-side composite (which the caption always uses).
+    """
     from ovfdb.mine import prompts as P
 
     user_id, partner_id = work.pair.frame(work.cands[0].user_role)
@@ -172,8 +177,11 @@ def process(work: Work, do_verify: bool, verify_cache: dict, counts: Counter) ->
         s.source_meta = {**base.source_meta, "mining_rule": cand.evidence.get("rule", ""), "evidence": cand.evidence,
                          "t0": b.t0, "t1": b.t1}
         if do_verify:
-            v = V.verify(work.clip_id, sbs, cand.dynamic_type, cand.bucket, s.dynamic_start_s, s.dynamic_end_s,
-                         s.duration_s, cand.evidence, cache=verify_cache, window=(b.t0, b.t1))
+            user_only = key in V.USER_ONLY_KEYS
+            media = Path(base.user_video_path) if user_only else sbs
+            v = V.verify(work.clip_id, media, cand.dynamic_type, cand.bucket, s.dynamic_start_s, s.dynamic_end_s,
+                         s.duration_s, cand.evidence, log=verify_log, cache=verify_cache, window=(b.t0, b.t1),
+                         user_only=user_only)
             s.source_meta["verify"] = {"is_dynamic": v.is_dynamic, "confidence": v.confidence, "notes": v.notes,
                                        "refined": v.refined, "cached": v.cached}
             log.info("  %s %s/%s -> %s (conf %.2f) %s", work.clip_id, cand.dynamic_type.value, cand.bucket.value,
@@ -259,9 +267,20 @@ def group_works(chosen: list[D.Candidate], pd: PairData, media: dict[str, float]
 def run(dynamics: str = "all", limit: int = 0, label: str = "naturalistic", split: str = "test",
         manifest: str = "manifest/ovfdb_v0.jsonl", verify: bool = True, workers: int = 2,
         scan: int = SCAN_DEFAULT, per_pair: int = 3, max_pairs: int = 0, max_minutes: float = 0.0,
-        require_3p: bool = False) -> Counter:
+        require_3p: bool = False, tag: str = "") -> Counter:
     """Mine clips into ``manifest``. ``limit`` = max clips per (dynamic, bucket); 0 = no cap.
-    ``require_3p`` restricts the scan to pairs with third-party (3P-V) annotations."""
+    ``require_3p`` restricts the scan to pairs with third-party (3P-V) annotations.
+    ``tag`` (e.g. "v1") keeps a re-mined set apart from the v0 one: clips in ``data/clips_<tag>/``,
+    rejected composites in ``data/mining/rejected_<tag>/``, VLM log ``data/mining/verify_<tag>.jsonl``,
+    prompt/caption cache ``data/mining/prompts_<tag>/`` (clip ids restart at _c00 per file)."""
+    global CLIP_ROOT, REJECTED_DIR
+    from ovfdb.mine import prompts as P
+    verify_log = V.VERIFY_LOG
+    if tag:
+        CLIP_ROOT = Path(f"data/clips_{tag}")
+        REJECTED_DIR = Path(f"data/mining/rejected_{tag}")
+        verify_log = Path(f"data/mining/verify_{tag}.jsonl")
+        P.PROMPT_DIR = Path(f"data/mining/prompts_{tag}")
     load_dotenv()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
     for noisy in ("httpx", "httpcore", "google_genai", "google_genai.models", "openai", "urllib3"):
@@ -278,7 +297,7 @@ def run(dynamics: str = "all", limit: int = 0, label: str = "naturalistic", spli
     samples = read_manifest(manifest_path) if manifest_path.exists() else []
     have = Counter((s.dynamic_type, s.bucket) for s in samples)
     present = {(s.clip_id, s.bucket) for s in samples}
-    verify_cache = V.load_cache() if verify else {}
+    verify_cache = V.load_cache(verify_log) if verify else {}
     index_map = _existing_index_map(samples, verify_cache)
     counts: Counter = Counter()
     cap = limit if limit > 0 else 10**9
@@ -386,7 +405,7 @@ def run(dynamics: str = "all", limit: int = 0, label: str = "naturalistic", spli
 
         def job(w: Work):
             try:
-                return process(w, verify, verify_cache, counts)
+                return process(w, verify, verify_cache, counts, verify_log)
             except Exception as e:  # noqa: BLE001 - one bad clip must not kill the run
                 log.warning("  %s failed: %s", w.clip_id, e)
                 counts[("errors",)] += 1

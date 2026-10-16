@@ -67,37 +67,55 @@ def test_pause_handling_rule():
     utts_b = [utt(12, 15, "oh that sounds nice")]
     c = only(D.find_all(vad_a, utts_a, vad_b, utts_b), DynamicType.PAUSE_HANDLING, Bucket.PERCEPTION)
     assert c.user_role == "a" and (c.ds_raw, c.de_raw) == (4.0, 6.0)
-    # B talking during the pause kills it
-    assert not D.find_pause_handling(vad_a, utts_a, [seg(4.5, 5.0)], [utt(4.5, 5.0, "right")])
+    # user-cue-only: B talking *during* the pause does not veto it (that is the partner's reaction)
+    c2 = D.find_pause_handling(vad_a, utts_a, [seg(4.5, 5.0)], [utt(4.5, 5.0, "right")])
+    assert [(x.ds_raw, x.de_raw) for x in c2] == [(4.0, 6.0)]
+    # ... nor does B taking a whole turn in the gap (A still resumes its own thought)
+    assert D.find_pause_handling(vad_a, utts_a, [seg(4.2, 5.8)], [utt(4.2, 5.8, "I think I know what you mean")])
+    # but B talking as A trails off means A did not hold the floor: no candidate
+    assert not D.find_pause_handling(vad_a, utts_a, [seg(3.2, 4.0)], [utt(3.2, 4.0, "the what")])
     # a pause longer than 4 s is a turn end, not a pause
     assert not D.find_pause_handling([seg(0, 4), seg(9, 12)], utts_a, vad_b, utts_b)
+    assert c.evidence["b_text_before"] == "" and "text_after" in c.evidence
 
 
 def test_verbal_backchanneling_rule():
-    vad_a = [seg(0, 10)]
-    vad_b = [seg(4.0, 4.5)]
-    utts_a = [utt(0, 10, "and then we drove all the way up the coast which took hours")]
-    utts_b = [utt(4.0, 4.5, "mhm")]
+    # A tells a long story; a 0.3 s breath at 4.5-4.8 inside the turn is the listener slot
+    vad_a = [seg(0, 4.5), seg(4.8, 10)]
+    utts_a = [utt(0, 4.5, "and then we drove all the way up the coast,"), utt(4.8, 10, "which took hours and hours honestly")]
+    vad_b, utts_b = [seg(12, 14)], [utt(12, 14, "wow that is far")]
     c = only(D.find_all(vad_a, utts_a, vad_b, utts_b), DynamicType.VERBAL_BACKCHANNELING, Bucket.GENERATION)
     assert c.user_role == "a"
-    assert abs(c.ds_raw - 3.7) < 1e-6 and abs(c.de_raw - 4.8) < 1e-6
-    assert c.evidence["backchannel_text"] == "mhm"
-    # a two-word, 1.5 s B utterance is not a backchannel
-    assert not D.find_verbal_backchanneling(vad_a, utts_a, [seg(4.0, 5.5)], [utt(4.0, 5.5, "oh really")])
+    assert abs(c.ds_raw - (4.5 - D.BC_SLOT_BEFORE_S)) < 1e-6 and abs(c.de_raw - (4.8 + D.BC_SLOT_AFTER_S)) < 1e-6
+    assert c.evidence["gap_s"] == 0.3 and c.evidence["text_before"].endswith("coast,")
+    # user-cue-only: whether B said "mhm" in the slot changes nothing
+    with_bc = D.find_verbal_backchanneling(vad_a, utts_a, [seg(4.6, 4.9)], [utt(4.6, 4.9, "mhm")])
+    without = D.find_verbal_backchanneling(vad_a, utts_a, [], [])
+    assert [(x.ds_raw, x.de_raw) for x in with_bc] == [(x.ds_raw, x.de_raw) for x in without] == [(c.ds_raw, c.de_raw)]
+    # B talking in the 2 s before the slot: B is not a quiet listener, no slot
+    assert not D.find_verbal_backchanneling(vad_a, utts_a, [seg(3.0, 4.0)], [utt(3.0, 4.0, "oh really")])
+    # a turn shorter than 6 s, or a slot in its first 3 s / last 1.5 s, is not a slot
+    assert not D.find_verbal_backchanneling([seg(0, 2.5), seg(2.8, 5.5)], utts_a, [], [])
+    assert not D.find_verbal_backchanneling([seg(0, 2.0), seg(2.3, 10)], utts_a, [], [])
+    assert not D.find_verbal_backchanneling([seg(0, 8.8), seg(9.1, 10)], utts_a, [], [])
 
 
 def test_verbal_interruption_rule():
     vad_b = [seg(0, 6.0)]                                # B talking...
-    vad_a = [seg(5.0, 9.0)]                              # A barges in at 5.0, B stops at 6.0, A holds 4 s
+    vad_a = [seg(5.0, 9.0)]                              # A barges in at 5.0 and holds 4 s
     utts_b = [utt(0, 6, "so the thing about that restaurant is that they")]
     utts_a = [utt(5.0, 9.0, "wait wait I went there last week")]
     c = only(D.find_all(vad_a, utts_a, vad_b, utts_b), DynamicType.VERBAL_INTERRUPTION, Bucket.GENERATION)
-    assert c.user_role == "a" and (c.ds_raw, c.de_raw) == (5.0, 6.0)
-    assert c.evidence["b_stop_s"] == 1.0
-    # B does not stop within 1.5 s -> no candidate
-    assert not D.find_verbal_interruption(vad_a, utts_a, [seg(0, 8.0)], utts_b)
+    assert c.user_role == "a" and (c.ds_raw, c.de_raw) == (5.0, 5.0 + D.YIELD_S)
+    assert "b_stop_s" not in c.evidence and c.evidence["b_text_before"].startswith("so the thing")
+    # user-cue-only: B not stopping at all (talks on to 8.0 s) is still a candidate
+    assert [(x.ds_raw, x.de_raw) for x in D.find_verbal_interruption(vad_a, utts_a, [seg(0, 8.0)], [utt(0, 8, "so the thing about that restaurant is that they do not take")])] == [(5.0, 6.5)]
     # A only backchannels -> no candidate
     assert not D.find_verbal_interruption([seg(5.0, 5.4)], [utt(5.0, 5.4, "yeah")], vad_b, utts_b)
+    # B had finished its words well before A's onset (VAD tail only): a hand-over, not an interruption
+    assert not D.find_verbal_interruption(vad_a, utts_a, [seg(0, 6.0)], [utt(0, 4.0, "so the thing about that")])
+    # A does not hold the floor for 2 s -> no candidate
+    assert not D.find_verbal_interruption([seg(5.0, 6.2)], [utt(5.0, 6.2, "wait wait no")], vad_b, utts_b)
 
 
 def test_turn_taking_rule():
@@ -105,11 +123,22 @@ def test_turn_taking_rule():
     vad_a = [seg(4.8, 11.0)]
     utts_b = [utt(0, 4, "what did you do this weekend"), utt(12, 16, "oh nice I love hiking")]
     utts_a = [utt(4.8, 11.0, "I went hiking with my sister do you like hiking?")]
-    c = only(D.find_all(vad_a, utts_a, vad_b, utts_b), DynamicType.TURN_TAKING, Bucket.GENERATION)
-    assert c.user_role == "a" and (c.ds_raw, c.de_raw) == (11.0, 12.0)
-    assert c.evidence["ends_with_question"] is True
-    # overlap on the handoff -> no candidate
-    assert not D.find_turn_taking(vad_a, utts_a, [seg(0, 4), seg(10.5, 16)], utts_b)
+    cands = [c for c in D.find_all(vad_a, utts_a, vad_b, utts_b) if c.dynamic_type is DynamicType.TURN_TAKING]
+    # both hand-overs qualify now (A->B at 11.0 and, with roles swapped, B->A at 16.0)
+    assert sorted((c.user_role, c.ds_raw, c.de_raw) for c in cands) == [("a", 11.0, 11.0 + D.HANDOFF_S), ("b", 16.0, 16.0 + D.HANDOFF_S)]
+    c = next(x for x in cands if x.user_role == "a")
+    assert c.evidence["ends_with_question"] is True and "handoff_gap_s" not in c.evidence
+    # user-cue-only: B's reply timing does not matter --- a late reply (14 s) or none at all still yields the cue
+    assert [x.ds_raw for x in D.find_turn_taking(vad_a, utts_a, [seg(0, 4), seg(14.0, 16)], utts_b)] == [11.0]
+    assert [x.ds_raw for x in D.find_turn_taking(vad_a, utts_a, [seg(0, 4)], utts_b[:1])] == [11.0]
+    # B overlapping A's last half second -> no clean hand-over
+    assert not D.find_turn_taking(vad_a, utts_a, [seg(0, 4), seg(10.7, 16)], utts_b)
+    # A resumes with real content within 4 s -> that was a pause, not a floor offer
+    assert not D.find_turn_taking([seg(4.8, 11.0), seg(13.0, 15.0)],
+                                  utts_a + [utt(13.0, 15.0, "and also my brother came")], [seg(0, 4)], utts_b[:1])
+    # ... but a one-word reaction from A is fine
+    assert [x.ds_raw for x in D.find_turn_taking([seg(4.8, 11.0), seg(13.0, 13.4)], utts_a + [utt(13.0, 13.4, "yeah")],
+                                                 vad_b, utts_b)] == [11.0]
 
 
 def test_laughter_rule_from_tokens_and_segments():

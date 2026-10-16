@@ -80,7 +80,8 @@ def nvidia_load(split: str = "validation"):
 @app.command()
 def mine(dynamics: str = "all", limit: int = 0, label: str = "naturalistic", split: str = "test",
          manifest: str = "manifest/ovfdb_v0.jsonl", verify: bool = True, workers: int = 2, scan: int = 60,
-         per_pair: int = 3, max_pairs: int = 0, max_minutes: float = 0.0, require_3p: bool = False):
+         per_pair: int = 3, max_pairs: int = 0, max_minutes: float = 0.0, require_3p: bool = False,
+         tag: str = ""):
     """WS2: find, verify and trim candidate clips → manifest.
 
     --dynamics: comma list (pause_handling,verbal_backchanneling,verbal_interruption,turn_taking,laughter,
@@ -88,12 +89,13 @@ def mine(dynamics: str = "all", limit: int = 0, label: str = "naturalistic", spl
     nonverbal_interruption), or all (day-1 dialogue), nonverbal (day-2), everything.
     --limit: max clips per (dynamic, bucket). --no-verify skips the Gemini check. --scan: pairs whose
     VAD/transcripts are scanned before choosing which media to download. --require-3p: only pairs with
-    third-party text annotations (Adaptor Handling source).
+    third-party text annotations (Adaptor Handling source). --tag v1: separate clip root / caches for a
+    re-mined set (pair with --manifest manifest/ovfdb_v1.jsonl).
     """
     from ovfdb.mine import pipeline  # WS2
     pipeline.run(dynamics=dynamics, limit=limit, label=label, split=split, manifest=manifest, verify=verify,
                  workers=workers, scan=scan, per_pair=per_pair, max_pairs=max_pairs, max_minutes=max_minutes,
-                 require_3p=require_3p)
+                 require_3p=require_3p, tag=tag)
 
 
 @app.command()

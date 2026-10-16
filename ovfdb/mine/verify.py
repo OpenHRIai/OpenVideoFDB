@@ -51,22 +51,42 @@ DEFINITIONS: dict[DynamicType, tuple[str, str]] = {
                               "start speaking within the handoff window; no talk-over"),
 }
 
-#: What our rule expects the human partner (= GT agent) to be doing, so the VLM checks both sides.
+#: Dialogue dynamics are verified **user-only** (v1 rules): the VLM sees the USER's own camera/mic clip and the
+#: partner's pre-window transcript, never the partner's reaction, so verification cannot re-introduce the
+#: selection bias the v1 rules removed (see dialogue.py module docstring).
+USER_ONLY_KEYS: frozenset[tuple[DynamicType, Bucket]] = frozenset({
+    (DynamicType.PAUSE_HANDLING, Bucket.PERCEPTION),
+    (DynamicType.VERBAL_BACKCHANNELING, Bucket.GENERATION),
+    (DynamicType.VERBAL_INTERRUPTION, Bucket.GENERATION),
+    (DynamicType.TURN_TAKING, Bucket.GENERATION),
+    (DynamicType.LAUGHTER, Bucket.PERCEPTION),
+    (DynamicType.LAUGHTER, Bucket.GENERATION),
+})
+
+#: What a positive example must show. Day-1 (user-only) entries describe the USER's cue and the partner's
+#: state *before* it only; day-2 nonverbal entries still describe both panes (side-by-side verification).
 PARTNER_EXPECTATION: dict[tuple[DynamicType, Bucket], str] = {
     (DynamicType.PAUSE_HANDLING, Bucket.PERCEPTION):
-        "the PARTNER stays silent during the pause and the USER resumes the same thought afterwards",
+        "the USER is mid-thought: they stop speaking for the window (1-4 s) with the sentence unfinished (trailing "
+        "'like...', 'and...', a searching look, lips parted, gaze drifting) and then resume the SAME thought. "
+        "A finished sentence followed by silence, or a pause that is really a hand-over, does not count",
     (DynamicType.VERBAL_BACKCHANNELING, Bucket.GENERATION):
-        "the PARTNER produces a short verbal backchannel ('mhm', 'yeah', 'right') inside the window while the USER keeps talking; "
-        "a cough, breath or laugh does not count",
+        "the USER is in the middle of a long turn (telling something, >= 6 s), the window sits at a brief breath / "
+        "clause boundary inside that turn, and the USER keeps talking right after it --- i.e. a natural slot where a "
+        "listener would say 'mhm' / 'yeah' without taking the floor. The USER must not be finishing or handing over",
     (DynamicType.VERBAL_INTERRUPTION, Bucket.GENERATION):
-        "the PARTNER is mid-sentence when the USER starts talking over them with real content (not a backchannel), "
-        "and the PARTNER stops and lets the USER continue",
+        "the partner (off-screen) was mid-sentence (see the partner transcript before the window) when the USER starts "
+        "talking over them at the window start with real content (not 'mhm' / 'yeah'), and the USER keeps the floor "
+        "for at least 2 s. A USER backchannel, a laugh, or starting after the partner had clearly finished does not count",
     (DynamicType.TURN_TAKING, Bucket.GENERATION):
-        "the USER clearly finishes and yields; the PARTNER starts a real reply at the end of the window without overlap",
+        "the USER clearly finishes a contribution at the window start (completed sentence, often a question, falling "
+        "intonation, looks at the partner) and offers the floor: they stay quiet through the window rather than "
+        "continuing. A mid-thought pause or a trailing-off that resumes does not count",
     (DynamicType.LAUGHTER, Bucket.PERCEPTION):
-        "the USER audibly/visibly laughs in the window in reaction to what the PARTNER just said",
+        "the USER audibly/visibly laughs in the window in reaction to what the partner (off-screen) just said "
+        "(see the partner transcript before the window)",
     (DynamicType.LAUGHTER, Bucket.GENERATION):
-        "the USER laughs during their own turn and the PARTNER reacts (laughs or smiles back) within ~2 s",
+        "the USER laughs during their own turn (while or right after speaking) at the start of the window",
     # --- day 2: nonverbal dynamics (docs/protocol.md §1; paper App. C.2 timing classes)
     (DynamicType.NONVERBAL_BACKCHANNELING, Bucket.PERCEPTION):
         "the PARTNER is mid-turn (talking before, during and after the window) and the USER, who is listening, "
@@ -140,9 +160,12 @@ def sbs_composite(user_mp4: Path | str, partner_mp4: Path | str, out: Path | str
     return out
 
 
-def build_prompt(dynamic: DynamicType, bucket: Bucket, ds: float, de: float, dur: float, evidence: dict | None = None) -> str:
+def build_prompt(dynamic: DynamicType, bucket: Bucket, ds: float, de: float, dur: float, evidence: dict | None = None,
+                 user_only: bool = False) -> str:
     user_does, agent_should = DEFINITIONS[dynamic]
     expect = PARTNER_EXPECTATION.get((dynamic, bucket), "")
+    if user_only:
+        return _build_user_only_prompt(dynamic, bucket, ds, de, dur, evidence or {}, user_does, expect)
     ev = ""
     if evidence:
         keep = {k: v for k, v in evidence.items() if k in ("text_before", "text_after", "backchannel_text", "a_text",
@@ -171,6 +194,32 @@ def build_prompt(dynamic: DynamicType, bucket: Bucket, ds: float, de: float, dur
     )
 
 
+def _build_user_only_prompt(dynamic: DynamicType, bucket: Bucket, ds: float, de: float, dur: float, evidence: dict,
+                            user_does: str, expect: str) -> str:
+    """Verification prompt that shows only the USER's clip (day-1 dialogue dynamics, v1 rules)."""
+    partner_before = " ".join(str(evidence.get("b_text_before") or "").split())
+    ctx = {k: v for k, v in evidence.items() if k in ("text_before", "text_after", "a_text", "gap_s", "turn_before_s")}
+    ev = ("Rule evidence from the USER's VAD/ASR (may be wrong): " + json.dumps(ctx, ensure_ascii=False) + "\n") if ctx else ""
+    pb = (f"What the PARTNER (off-screen) said before the window, from the transcript: \"{partner_before[-300:]}\"\n"
+          if partner_before else "The PARTNER (off-screen) said nothing in the seconds before the window.\n")
+    return (
+        "You are verifying a candidate clip for a benchmark of conversational dynamics.\n"
+        "The video shows ONLY the USER (their own camera and microphone) in a face-to-face conversation. The PARTNER "
+        "is off-screen and inaudible; you are told what they said before the window.\n\n"
+        f"Dynamic: {dynamic.value} ({bucket.value} bucket)\n"
+        f"Definition: the USER {user_does}.\n"
+        f"What a positive example must show here: {expect}\n"
+        f"Candidate window: {ds:.2f} s to {de:.2f} s (clip is {dur:.1f} s long, timestamps from the clip start).\n"
+        f"{pb}{ev}\n"
+        "Watch the whole clip. Decide whether the USER's behaviour in and around the window really is this cue. "
+        "Judge the USER only: do NOT infer, require or guess anything about how the partner reacted afterwards --- "
+        "that is measured separately. Be strict: reject if the cue is absent, ambiguous, or clearly outside the "
+        "window. If the cue is present but the window is slightly off, give a corrected start_s/end_s.\n"
+        'Return JSON: {"is_dynamic": bool, "confidence": number 0-1, "start_s": number, "end_s": number, '
+        '"notes": "one or two sentences citing what you saw/heard with timestamps"}'
+    )
+
+
 def _cache_key(clip_id: str, dynamic: DynamicType, bucket: Bucket) -> str:
     return f"{clip_id}|{dynamic.value}|{bucket.value}"
 
@@ -193,9 +242,11 @@ def _append(log: Path, d: dict) -> None:
 
 def verify(clip_id: str, sbs_mp4: Path | str, dynamic: DynamicType, bucket: Bucket, ds: float, de: float,
            dur: float, evidence: dict | None = None, log: Path = VERIFY_LOG, cache: dict | None = None,
-           min_conf: float = MIN_CONFIDENCE, window: tuple[float, float] | None = None) -> Verdict:
+           min_conf: float = MIN_CONFIDENCE, window: tuple[float, float] | None = None,
+           user_only: bool = False) -> Verdict:
     """Ask the VLM; log and return the decision. ``cache`` (from ``load_cache``) skips repeat calls
-    for the same clip id, unless the logged raw window ``(t0, t1)`` differs from ``window``."""
+    for the same clip id, unless the logged raw window ``(t0, t1)`` differs from ``window``.
+    With ``user_only`` the media is the USER's own clip and the prompt never mentions the partner's reaction."""
     key = _cache_key(clip_id, dynamic, bucket)
     cache = cache if cache is not None else load_cache(log)
     if key in cache:
@@ -204,7 +255,8 @@ def verify(clip_id: str, sbs_mp4: Path | str, dynamic: DynamicType, bucket: Buck
         if same:
             return Verdict(**{k: d.get(k) for k in Verdict.__dataclass_fields__ if k != "cached"}, cached=True)
 
-    out, usage = G.generate(build_prompt(dynamic, bucket, ds, de, dur, evidence), Path(sbs_mp4), mime="video/mp4")
+    out, usage = G.generate(build_prompt(dynamic, bucket, ds, de, dur, evidence, user_only=user_only), Path(sbs_mp4),
+                            mime="video/mp4")
     out = out if isinstance(out, dict) else {}
     is_dyn = bool(out.get("is_dynamic", False))
     try:
@@ -227,6 +279,7 @@ def verify(clip_id: str, sbs_mp4: Path | str, dynamic: DynamicType, bucket: Buck
                 ds=nds, de=nde, refined=refined, usage=usage)
     d = {k: getattr(v, k) for k in Verdict.__dataclass_fields__ if k != "cached"}
     d["rule_ds"], d["rule_de"] = ds, de
+    d["user_only"] = user_only
     if window is not None:
         d["t0"], d["t1"] = float(window[0]), float(window[1])
     _append(log, d)
