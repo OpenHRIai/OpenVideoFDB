@@ -1,6 +1,7 @@
 # data & runs never go in git
 /data/
 /runs/
+/runs*/
 *.mp4
 *.wav
 *.webm
@@ -30,3 +31,6 @@ build/
 
 # keep placeholders
 !**/.gitkeep
+
+# NVIDIA manifests carry the gated dataset's annotations/captions: never in git
+manifest/nvidia_*.jsonl

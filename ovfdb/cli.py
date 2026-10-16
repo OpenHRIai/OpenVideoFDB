@@ -70,11 +70,28 @@ def seamless_check(user_id: str, partner_id: str = ""):
     raise typer.Exit(code=0 if ok else 1)
 
 
+@nvidia_app.command("snapshot")
+def nvidia_snapshot(validation_only: bool = False, split: str = ""):
+    """WS7: download the gated dataset to data/nvidia (HF_TOKEN in .env). --validation-only / --split limit the media."""
+    from ovfdb.data.nvidia import snapshot  # WS7
+    typer.echo(f"snapshot -> {snapshot(validation_only=validation_only, split=split or None)}")
+
+
 @nvidia_app.command("load")
 def nvidia_load(split: str = "validation"):
+    """WS7: print the rows of a split as Samples."""
     from ovfdb.data.nvidia import load  # WS7
     for s in load(split):
-        typer.echo(f"{s.clip_id}\t{s.bucket.value}\t{s.dynamic_type.value}\t{s.dynamic_start_s:.2f}-{s.dynamic_end_s:.2f}")
+        typer.echo(f"{s.clip_id}\t{s.bucket.value}\t{s.dynamic_type.value}\t{s.dynamic_start_s:.2f}-{s.dynamic_end_s:.2f}"
+                   f"\tfirst={s.agent_speaks_first}\twords={len(s.user_words)}\tcaption={len(s.av_caption)}ch"
+                   f"\tpartner={'yes' if s.partner_audio_path else 'no'}")
+
+
+@nvidia_app.command("manifest")
+def nvidia_manifest(split: str = "validation", out: str = ""):
+    """WS7: write manifest/nvidia_<split>.jsonl (git-ignored) for `ovfdb run / score / report`."""
+    from ovfdb.data.nvidia import write_manifest_for  # WS7
+    typer.echo(f"wrote {write_manifest_for(split, out or None)}")
 
 
 @app.command()
