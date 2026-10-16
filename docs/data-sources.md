@@ -11,7 +11,17 @@
   README.md  LICENSE.md  "Video-Full-Duplex-Benchmark Data Card.docx"
   <id>/<sample_id>/speaker{1,2}.{wav,mp4}   # 16 kHz mono wav; VP9-in-mp4 (use pyav/imageio-ffmpeg, not decord)
   ```
-  Validation ships both speakers; test ships only the user side (`speaker1`).
+  **As shipped (release 1.0.0, verified 2026-10-16):** the user side is `speaker1` *or* `speaker2` per
+  row (`audio_file_path`); the other speaker's files exist for only 3 of the 8 validation clips (4 of 11
+  rows: Laughter P+G, Nonverbal Backchanneling P+G) and for no test clip, so the human reference is
+  computable on those 4 rows only. wav is **32 kHz** PCM16 mono (card says 16 kHz; the harness
+  resamples); mp4 is VP9 1280x720 30 fps with **Opus** audio (PyAV decodes it; `ensure_h264` exists
+  for decoders that cannot). `user_transcript_chunks` = `[{"text", "timestamp": [start, end]}]`.
+  `agent_channel` is empty on validation. Windows are long (e.g. Turn-taking 1–35 s, Verbal
+  Backchanneling 21–35 s, Face Emotion 11–20 s), unlike our 1–2 s mined windows. Captions are
+  600–1000 chars (ours ≈ 2500). Test: 226 rows, 202 distinct user files, durations 14–142 s (median 46).
+  Loader: `ovfdb nvidia snapshot|load|manifest` (`ovfdb/data/nvidia.py`); manifests
+  `manifest/nvidia_*.jsonl` are git-ignored.
 - `0_metadata_*`: `id`, `sample_id`, `bucket` (perception|generation),
   `duration_s`, `audio_file_path`, `video_file_path`, `system_prompt`.
 - `0_annotations_*` (join on id, sample_id, bucket): `dynamic_type`,
