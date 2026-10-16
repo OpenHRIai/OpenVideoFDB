@@ -1,27 +1,77 @@
 # OpenVideoFDB summary
 
 Runs: runs/gt, runs/random  
-Judge: gpt-4o. n = manifest rows (clip, bucket) scored. Overall = mean of each perception row's available judge axes. Brackets are 95 % bootstrap CIs over rows (1000 resamples, seed 0). TOR-Align % = fraction of timed rows whose takeover matches the expected class; latency is the median.
+Judge: gpt-4o. n = manifest rows (clip, bucket) scored. Notation follows the VideoFDB project page (Table 1): Setting = <input>2<output> modality (AV2A = frames + audio in, audio out; A2A = same agents, video withheld; AV2AV = video out). Vis. Ground. = the Semantic/Visual Grounding axis. Overall = mean of each perception row's available judge axes. Timing = TOR-Align % (timed rows whose takeover matches the expected class) / median latency ms over timed rows; an agent already talking when the window opens counts as 0 ms, so read latency together with TOR-Align. The second table repeats the metrics with 95 % bootstrap CIs over rows (1000 resamples, seed 0).
 
-| provider | mode | n | Fluency | Conv. Flow | Grounding | Overall | TOR-Align % | Latency ms |
+| Model | Setting | n | Fluency ↑ | Conv. Flow ↑ | Vis. Ground. ↑ | Overall ↑ | Timing ↑ |
+|---|---|---|---|---|---|---|---|
+| **Human reference** | | | | | | | |
+| Human reference | AV2AV | 118 | 4.26 | 4.46 | 4.00 | 4.27 | 95% / 496 ms |
+| **Random baseline** | | | | | | | |
+| Random baseline (mismatched partner) | AV2AV | 118 | 2.19 | 2.39 | 3.18 | 2.47 | 47% / 0 ms |
+
+## With 95 % bootstrap CIs
+
+| Model | Setting | n | Fluency | Conv. Flow | Vis. Ground. | Overall | TOR-Align % | Latency ms |
 |---|---|---|---|---|---|---|---|---|
-| human_gt | av | 60 | 4.25 [3.80, 4.65] | 4.60 [4.00, 5.00] | 3.40 [2.90, 3.90] | 4.12 [3.67, 4.50] | 100 [100, 100] | 508 [304, 652] |
-| random | av | 60 | 2.55 [1.65, 3.35] | 3.40 [2.00, 4.50] | 2.30 [2.00, 2.70] | 2.70 [1.93, 3.42] | 35 [22, 50] | 40 [0, 2176] |
+| Human reference | AV2AV | 118 | 4.26 [3.96, 4.56] | 4.46 [4.21, 4.71] | 4.00 [3.61, 4.36] | 4.27 [4.06, 4.49] | 95 [91, 100] | 496 [360, 648] |
+| Random baseline (mismatched partner) | AV2AV | 118 | 2.19 [1.61, 2.74] | 2.39 [1.61, 3.21] | 3.18 [2.71, 3.68] | 2.47 [1.97, 2.94] | 47 [35, 59] | 0 [0, 680] |
 
 ## Per dynamic
 
-| provider | mode | dynamic_type | n | Fluency | Conv. Flow | Grounding | Overall | TOR-Align % | Latency ms |
+| Model | Setting | dynamic_type | n | Fluency ↑ | Conv. Flow ↑ | Vis. Ground. ↑ | Overall ↑ | Timing ↑ |
+|---|---|---|---|---|---|---|---|---|
+| **Human reference** | | | | | | | | |
+| Human reference | AV2AV | Adaptor Handling | 8 | 4.12 | — | 5.00 | 4.56 | 75% / — |
+| Human reference | AV2AV | Emotion Matching | 8 | — | — | — | — | — |
+| Human reference | AV2AV | Face Emotion Display | 16 | 3.38 | — | 4.25 | 3.81 | — |
+| Human reference | AV2AV | Gaze Avoidance with Pause | 8 | 5.00 | 5.00 | — | 5.00 | 100% / — |
+| Human reference | AV2AV | Laughter | 20 | 4.00 | — | 3.40 | 3.70 | — |
+| Human reference | AV2AV | Nonverbal Backchanneling | 16 | 5.00 | 4.00 | — | 4.50 | 88% / — |
+| Human reference | AV2AV | Nonverbal Interruption | 2 | 2.50 | 3.50 | 2.00 | 2.67 | 100% / 308 ms |
+| Human reference | AV2AV | Pause Handling | 10 | 4.50 | 4.60 | — | 4.55 | 100% / 1016 ms |
+| Human reference | AV2AV | Turn-taking | 10 | — | — | — | — | 100% / 632 ms |
+| Human reference | AV2AV | Verbal Backchanneling | 10 | — | — | — | — | 100% / 304 ms |
+| Human reference | AV2AV | Verbal Interruption | 10 | — | — | — | — | 100% / 636 ms |
+| **Random baseline** | | | | | | | | |
+| Random baseline (mismatched partner) | AV2AV | Adaptor Handling | 8 | 1.88 | — | 5.00 | 3.44 | 62% / — |
+| Random baseline (mismatched partner) | AV2AV | Emotion Matching | 8 | — | — | — | — | — |
+| Random baseline (mismatched partner) | AV2AV | Face Emotion Display | 16 | 1.50 | — | 2.25 | 1.88 | — |
+| Random baseline (mismatched partner) | AV2AV | Gaze Avoidance with Pause | 8 | 1.88 | 2.12 | — | 2.00 | 50% / 0 ms |
+| Random baseline (mismatched partner) | AV2AV | Laughter | 20 | 2.00 | — | 2.30 | 2.15 | — |
+| Random baseline (mismatched partner) | AV2AV | Nonverbal Backchanneling | 16 | 1.88 | 1.50 | — | 1.69 | 100% / — |
+| Random baseline (mismatched partner) | AV2AV | Nonverbal Interruption | 2 | 5.00 | 2.00 | 4.00 | 3.67 | 0% / — |
+| Random baseline (mismatched partner) | AV2AV | Pause Handling | 10 | 3.10 | 3.40 | — | 3.25 | 80% / 196 ms |
+| Random baseline (mismatched partner) | AV2AV | Turn-taking | 10 | — | — | — | — | 50% / 0 ms |
+| Random baseline (mismatched partner) | AV2AV | Verbal Backchanneling | 10 | — | — | — | — | 0% / — |
+| Random baseline (mismatched partner) | AV2AV | Verbal Interruption | 10 | — | — | — | — | 10% / 2904 ms |
+
+## Per dynamic with 95 % bootstrap CIs
+
+| Model | Setting | dynamic_type | n | Fluency | Conv. Flow | Vis. Ground. | Overall | TOR-Align % | Latency ms |
 |---|---|---|---|---|---|---|---|---|---|
-| human_gt | av | Laughter | 20 | 4.00 [3.50, 4.40] | — | 3.40 [2.90, 3.90] | 3.70 [3.30, 4.05] | — | — |
-| human_gt | av | Pause Handling | 10 | 4.50 [3.60, 5.00] | 4.60 [4.00, 5.00] | — | 4.55 [3.80, 5.00] | 100 [100, 100] | 1016 [1000, 1032] |
-| human_gt | av | Turn-taking | 10 | — | — | — | — | 100 [100, 100] | 632 [456, 1032] |
-| human_gt | av | Verbal Backchanneling | 10 | — | — | — | — | 100 [100, 100] | 304 [270, 304] |
-| human_gt | av | Verbal Interruption | 10 | — | — | — | — | 100 [100, 100] | 636 [516, 900] |
-| random | av | Laughter | 20 | 2.00 [1.20, 2.80] | — | 2.30 [2.00, 2.70] | 2.15 [1.70, 2.60] | — | — |
-| random | av | Pause Handling | 10 | 3.10 [1.60, 4.50] | 3.40 [2.00, 4.50] | — | 3.25 [1.75, 4.50] | 80 [50, 100] | 196 [0, 2176] |
-| random | av | Turn-taking | 10 | — | — | — | — | 50 [20, 80] | 0 [0, 968] |
-| random | av | Verbal Backchanneling | 10 | — | — | — | — | 0 [0, 0] | — |
-| random | av | Verbal Interruption | 10 | — | — | — | — | 10 [0, 30] | 2904 [0, 4133] |
+| Human reference | AV2AV | Adaptor Handling | 8 | 4.12 [2.88, 4.88] | — | 5.00 [5.00, 5.00] | 4.56 [3.94, 4.94] | 75 [38, 100] | — |
+| Human reference | AV2AV | Emotion Matching | 8 | — | — | — | — | — | — |
+| Human reference | AV2AV | Face Emotion Display | 16 | 3.38 [2.75, 4.12] | — | 4.25 [4.00, 4.50] | 3.81 [3.44, 4.25] | — | — |
+| Human reference | AV2AV | Gaze Avoidance with Pause | 8 | 5.00 [5.00, 5.00] | 5.00 [5.00, 5.00] | — | 5.00 [5.00, 5.00] | 100 [100, 100] | — |
+| Human reference | AV2AV | Laughter | 20 | 4.00 [3.50, 4.40] | — | 3.40 [2.90, 3.90] | 3.70 [3.30, 4.05] | — | — |
+| Human reference | AV2AV | Nonverbal Backchanneling | 16 | 5.00 [5.00, 5.00] | 4.00 [4.00, 4.00] | — | 4.50 [4.50, 4.50] | 88 [62, 100] | — |
+| Human reference | AV2AV | Nonverbal Interruption | 2 | 2.50 [2.00, 3.00] | 3.50 [3.00, 4.00] | 2.00 [1.00, 3.00] | 2.67 [2.00, 3.33] | 100 [100, 100] | 308 [122, 494] |
+| Human reference | AV2AV | Pause Handling | 10 | 4.50 [3.60, 5.00] | 4.60 [4.00, 5.00] | — | 4.55 [3.80, 5.00] | 100 [100, 100] | 1016 [1000, 1032] |
+| Human reference | AV2AV | Turn-taking | 10 | — | — | — | — | 100 [100, 100] | 632 [456, 1032] |
+| Human reference | AV2AV | Verbal Backchanneling | 10 | — | — | — | — | 100 [100, 100] | 304 [270, 304] |
+| Human reference | AV2AV | Verbal Interruption | 10 | — | — | — | — | 100 [100, 100] | 636 [516, 900] |
+| Random baseline (mismatched partner) | AV2AV | Adaptor Handling | 8 | 1.88 [0.50, 3.38] | — | 5.00 [5.00, 5.00] | 3.44 [2.75, 4.19] | 62 [25, 88] | — |
+| Random baseline (mismatched partner) | AV2AV | Emotion Matching | 8 | — | — | — | — | — | — |
+| Random baseline (mismatched partner) | AV2AV | Face Emotion Display | 16 | 1.50 [0.75, 2.50] | — | 2.25 [2.00, 2.75] | 1.88 [1.38, 2.38] | — | — |
+| Random baseline (mismatched partner) | AV2AV | Gaze Avoidance with Pause | 8 | 1.88 [0.62, 3.75] | 2.12 [0.62, 3.88] | — | 2.00 [0.62, 3.81] | 50 [12, 88] | 0 [0, 0] |
+| Random baseline (mismatched partner) | AV2AV | Laughter | 20 | 2.00 [1.20, 2.80] | — | 2.30 [2.00, 2.70] | 2.15 [1.70, 2.60] | — | — |
+| Random baseline (mismatched partner) | AV2AV | Nonverbal Backchanneling | 16 | 1.88 [0.62, 3.75] | 1.50 [0.50, 3.00] | — | 1.69 [0.56, 3.38] | 100 [100, 100] | — |
+| Random baseline (mismatched partner) | AV2AV | Nonverbal Interruption | 2 | 5.00 [5.00, 5.00] | 2.00 [2.00, 2.00] | 4.00 [4.00, 4.00] | 3.67 [3.67, 3.67] | 0 [0, 0] | — |
+| Random baseline (mismatched partner) | AV2AV | Pause Handling | 10 | 3.10 [1.60, 4.50] | 3.40 [2.00, 4.50] | — | 3.25 [1.75, 4.50] | 80 [50, 100] | 196 [0, 2176] |
+| Random baseline (mismatched partner) | AV2AV | Turn-taking | 10 | — | — | — | — | 50 [20, 80] | 0 [0, 968] |
+| Random baseline (mismatched partner) | AV2AV | Verbal Backchanneling | 10 | — | — | — | — | 0 [0, 0] | — |
+| Random baseline (mismatched partner) | AV2AV | Verbal Interruption | 10 | — | — | — | — | 10 [0, 30] | 2904 [0, 4133] |
 
 ## Calibration notes (v2, 2026-10-16)
 

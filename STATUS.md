@@ -35,7 +35,11 @@ Committed and pushed through the commits below. Everything on disk under `runs/`
    (b) caption v2 (item 2) and re-judge; (c) WS6b/6c (Tavus/Anam via Playwright, generation judge —
    the 24 generation nonverbal rows have no judge yet); (d) WS8 README + manifest-only publish;
    (e) optional second judge (needs ANTHROPIC_API_KEY) for agreement numbers via `report.agreement`.
-5. Keys: GOOGLE_API_KEY and OPENAI_API_KEY in `.env`; no ANTHROPIC key yet. TAVUS/ANAM keys exist in
+5. **Notation**: result tables follow the NVIDIA project page (Table 1): Model names as there, Setting =
+   <input>2<output> (AV2A / A2A / AV2AV / A2AV), axes Fluency / Conv. Flow / Vis. Ground. / Overall, Timing =
+   "TOR-Align % / median latency ms". Latency counts an agent already talking at the window start as 0 ms
+   (hence random ≈ 0 ms); read it with TOR-Align. `report.MODEL_NAMES` / `OUTPUT_MODALITY` extend it.
+6. Keys: GOOGLE_API_KEY and OPENAI_API_KEY in `.env`; no ANTHROPIC key yet. TAVUS/ANAM keys exist in
    fugubook's env if WS6b is attempted. Pre-existing lint nit: `ovfdb/schema.py` UP035 (shared contract,
    left alone).
 

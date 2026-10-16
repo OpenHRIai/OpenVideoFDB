@@ -24,13 +24,64 @@ from ovfdb.schema import Axis, Bucket
 N_BOOT = 1000
 SEED = 0
 
-#: (axis value, column label) in table order.
+#: (axis value, column label) in table order. Labels follow the VideoFDB project page / Table 1
+#: (docs/reference/nvidia_project_page_leaderboard.txt): Fluency, Conv. Flow, Vis. Ground., Overall, Timing.
 AXIS_COLUMNS: list[tuple[str, str]] = [
     (Axis.FLUENCY.value, "Fluency"),
     (Axis.CONVERSATIONAL_FLOW.value, "Conv. Flow"),
-    (Axis.SEMANTIC_GROUNDING.value, "Grounding"),
+    (Axis.SEMANTIC_GROUNDING.value, "Vis. Ground."),
 ]
 METRIC_COLUMNS = [label for _, label in AXIS_COLUMNS] + ["Overall", "TOR-Align %", "Latency ms"]
+#: Paper-style columns: the three axes + Overall, then one "Timing" cell = "TOR-Align % / median latency ms".
+PAPER_COLUMNS = [label for _, label in AXIS_COLUMNS] + ["Overall", "Timing"]
+
+# --- naming (paper notation) -----------------------------------------------------------
+#: Display name per (provider, model) as the project page spells it; fallback "<provider> <model>".
+MODEL_NAMES: dict[tuple[str, str], str] = {
+    ("human_gt", ""): "Human reference",
+    ("random", ""): "Random baseline (mismatched partner)",
+    ("gemini_live", "gemini-3.1-flash-live-preview"): "Gemini 3.1 Flash Live",
+    ("gemini_live", "gemini-2.5-flash-native-audio-preview-09-2025"): "Gemini 2.5 Flash Native",
+    ("gemini_live", "gemini-2.5-flash-preview-native-audio-dialog"): "Gemini 2.5 Flash Native",
+    ("openai_realtime", "gpt-realtime"): "OpenAI gpt-realtime",
+    ("openai_realtime", "gpt-realtime-mini"): "OpenAI gpt-realtime-mini",
+    ("tavus", ""): "Tavus Griffin Lite",
+    ("anam", ""): "Gemini 2.5 + Anam",
+}
+#: What the agent emits: "A" (audio only) or "AV" (audio + video). The human partner and the
+#: mismatched-partner baseline are real people on camera, so AV.
+OUTPUT_MODALITY: dict[str, str] = {
+    "human_gt": "AV", "random": "AV", "gemini_live": "A", "openai_realtime": "A",
+    "tavus": "AV", "anam": "AV", "keyframe": "AV",
+}
+#: Row-group order and headers as on the project page (Tables 1 and 2).
+SETTING_GROUPS: list[tuple[str, str]] = [
+    ("REF", "Human reference"),
+    ("RANDOM", "Random baseline"),
+    ("AV2AV", "Full-duplex AV2AV models"),
+    ("AV2A", "Full-duplex speech-vision (AV2A)"),
+    ("A2A", "Audio-only baselines (A2A; same agents, video withheld)"),
+    ("A2AV", "Cascaded speech-to-avatar (A2AV)"),
+]
+
+
+def model_name(provider: str, model: str | None) -> str:
+    model = (model or "").strip()
+    return MODEL_NAMES.get((provider, model)) or MODEL_NAMES.get((provider, "")) or f"{provider} {model}".strip()
+
+
+def setting(provider: str, mode: str) -> str:
+    """Paper notation <input>2<output>: input AV when frames were streamed (`mode == "av"`), else A."""
+    inp = "AV" if mode == "av" else "A"
+    return f"{inp}2{OUTPUT_MODALITY.get(provider, 'A')}"
+
+
+def setting_group(provider: str, mode: str) -> str:
+    if provider == "human_gt":
+        return "REF"
+    if provider == "random":
+        return "RANDOM"
+    return setting(provider, mode)
 
 
 # --- loading ---------------------------------------------------------------------
@@ -98,7 +149,7 @@ def load_run(run_dir: str | Path, judge: str | None = None,
     run_dir = Path(run_dir)
     if not run_dir.is_dir():
         raise FileNotFoundError(run_dir)
-    provider = mode = judge_name = None
+    provider = mode = judge_name = model = None
     clips: list[dict] = []
     for d, bucket, rd in iter_row_dirs(run_dir):
         if keep is not None and (d.name, bucket) not in keep:
@@ -110,6 +161,9 @@ def load_run(run_dir: str | Path, judge: str | None = None,
         src = t or j or {}
         provider = provider or src.get("provider")
         mode = mode or src.get("mode")
+        if model is None:
+            r = _read_json(d / "run.json")
+            model = (r or {}).get("model") or ""
         axes, overall, jn = _axes_from_judge(j, judge)
         judge_name = judge_name or jn
         timing = (t or {}).get("timing") or {}
@@ -125,9 +179,11 @@ def load_run(run_dir: str | Path, judge: str | None = None,
     if provider is None:
         r = _read_json(next(iter(run_dir.glob("*/run.json")), Path("/nonexistent")))
         if r:
-            provider, mode = r.get("provider"), r.get("mode")
-    return {"run": run_dir.name, "run_dir": str(run_dir), "provider": provider or run_dir.name, "mode": mode or "",
-            "judge": judge or judge_name, "clips": clips}
+            provider, mode, model = r.get("provider"), r.get("mode"), r.get("model")
+    provider, mode = provider or run_dir.name, mode or ""
+    return {"run": run_dir.name, "run_dir": str(run_dir), "provider": provider, "mode": mode, "model": model or "",
+            "Model": model_name(provider, model), "Setting": setting(provider, mode),
+            "group": setting_group(provider, mode), "judge": judge or judge_name, "clips": clips}
 
 
 # --- statistics ----------------------------------------------------------------------
@@ -188,10 +244,20 @@ def summarise(run_dirs: Iterable[str | Path], *, judge: str | None = None, n_boo
     rows = []
     for rd in run_dirs:
         r = load_run(rd, judge, keep)
-        row = {"run": r["run"], "provider": r["provider"], "mode": r["mode"], "judge": r["judge"]}
+        row = {"run": r["run"], "Model": r["Model"], "Setting": r["Setting"], "group": r["group"],
+               "provider": r["provider"], "mode": r["mode"], "model": r["model"], "judge": r["judge"]}
         row.update(_metrics(r["clips"], n_boot=n_boot, seed=seed))
         rows.append(row)
-    return pd.DataFrame(rows)
+    return _paper_order(pd.DataFrame(rows))
+
+
+def _paper_order(df: pd.DataFrame) -> pd.DataFrame:
+    """Stable sort into the project page's group order (reference, random, AV2AV, AV2A, A2A, A2AV)."""
+    if df.empty or "group" not in df:
+        return df
+    rank = {g: i for i, (g, _) in enumerate(SETTING_GROUPS)}
+    key = df["group"].map(lambda g: rank.get(g, len(rank)))
+    return df.assign(_k=key).sort_values("_k", kind="stable").drop(columns="_k").reset_index(drop=True)
 
 
 def per_dynamic(run_dirs: Iterable[str | Path], *, judge: str | None = None, n_boot: int = N_BOOT,
@@ -204,10 +270,11 @@ def per_dynamic(run_dirs: Iterable[str | Path], *, judge: str | None = None, n_b
         for c in r["clips"]:
             by_dyn.setdefault(c["dynamic_type"] or "?", []).append(c)
         for dyn in sorted(by_dyn):
-            row = {"run": r["run"], "provider": r["provider"], "mode": r["mode"], "dynamic_type": dyn}
+            row = {"run": r["run"], "Model": r["Model"], "Setting": r["Setting"], "group": r["group"],
+                   "provider": r["provider"], "mode": r["mode"], "model": r["model"], "dynamic_type": dyn}
             row.update(_metrics(by_dyn[dyn], n_boot=n_boot, seed=seed))
             rows.append(row)
-    return pd.DataFrame(rows)
+    return _paper_order(pd.DataFrame(rows))
 
 
 def agreement(run_dir: str | Path, judge_a: str, judge_b: str) -> dict:
@@ -268,7 +335,7 @@ def _cell(row: pd.Series, label: str) -> str:
 
 
 def to_markdown(df: pd.DataFrame, id_cols: list[str]) -> str:
-    """Markdown table: id columns + n + each metric as `point [lo, hi]`."""
+    """Markdown table with CIs: id columns + n + each metric as `point [lo, hi]`."""
     if df.empty:
         return "_(no runs)_\n"
     cols = id_cols + ["n"] + METRIC_COLUMNS
@@ -276,6 +343,41 @@ def to_markdown(df: pd.DataFrame, id_cols: list[str]) -> str:
     for _, row in df.iterrows():
         cells = [str(row.get(c, "")) for c in id_cols] + [str(int(row["n"]))]
         cells += [_cell(row, m) for m in METRIC_COLUMNS]
+        lines.append("| " + " | ".join(cells) + " |")
+    return "\n".join(lines) + "\n"
+
+
+def _timing_cell(row: pd.Series) -> str:
+    tor, lat = row.get("TOR-Align %", math.nan), row.get("Latency ms", math.nan)
+    if isinstance(tor, float) and math.isnan(tor):
+        return "—"
+    return f"{_fmt(tor, 0)}% / {_fmt(lat, 0)} ms" if not (isinstance(lat, float) and math.isnan(lat)) else f"{_fmt(tor, 0)}% / —"
+
+
+def to_paper_markdown(df: pd.DataFrame, extra_cols: list[str] | None = None) -> str:
+    """Project-page layout: rows grouped under setting headers; Model | [extra] | n | axes | Overall | Timing.
+
+    Point estimates only (the CI table is `to_markdown`); Timing = "TOR-Align % / median latency ms",
+    as in the page's Table 1 ("90% / 1400 ms").
+    """
+    if df.empty:
+        return "_(no runs)_\n"
+    extra = extra_cols or []
+    cols = ["Model"] + extra + ["n"] + [f"{c} ↑" for c in PAPER_COLUMNS]
+    lines = ["| " + " | ".join(cols) + " |", "|" + "|".join("---" for _ in cols) + "|"]
+    for g, header in SETTING_GROUPS:
+        sub = df[df["group"] == g] if "group" in df else df.iloc[0:0]
+        if sub.empty:
+            continue
+        lines.append("| **" + header + "** |" + " |" * (len(cols) - 1))
+        for _, row in sub.iterrows():
+            cells = [str(row["Model"])] + [str(row.get(c, "")) for c in extra] + [str(int(row["n"]))]
+            cells += [_fmt(row.get(m, math.nan), 2) for m in PAPER_COLUMNS if m != "Timing"] + [_timing_cell(row)]
+            lines.append("| " + " | ".join(cells) + " |")
+    rest = df[~df["group"].isin([g for g, _ in SETTING_GROUPS])] if "group" in df else df.iloc[0:0]
+    for _, row in rest.iterrows():
+        cells = [str(row["Model"])] + [str(row.get(c, "")) for c in extra] + [str(int(row["n"]))]
+        cells += [_fmt(row.get(m, math.nan), 2) for m in PAPER_COLUMNS if m != "Timing"] + [_timing_cell(row)]
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines) + "\n"
 
@@ -297,21 +399,30 @@ def write(run_dirs: Iterable[str | Path], per_dynamic: bool = False, out: str | 
     scope = (f" Rows restricted to {'the first ' + str(rows) + ' rows of ' if rows else ''}{manifest}."
              if manifest else "")
     note = (f"Judge: {', '.join(judges) or '—'}. n = manifest rows (clip, bucket) scored.{scope} "
-            "Overall = mean of each perception row's available judge axes. "
-            f"Brackets are 95 % bootstrap CIs over rows ({n_boot} resamples, seed {seed}). "
-            "TOR-Align % = fraction of timed rows whose takeover matches the expected class; latency is the median.")
+            "Notation follows the VideoFDB project page (Table 1): Setting = <input>2<output> modality "
+            "(AV2A = frames + audio in, audio out; A2A = same agents, video withheld; AV2AV = video out). "
+            "Vis. Ground. = the Semantic/Visual Grounding axis. Overall = mean of each perception row's "
+            "available judge axes. Timing = TOR-Align % (timed rows whose takeover matches the expected class) "
+            f"/ median latency ms over timed rows; an agent already talking when the window opens counts as 0 ms, "
+            "so read latency together with TOR-Align. The second table repeats the metrics with 95 % bootstrap CIs over rows "
+            f"({n_boot} resamples, seed {seed}).")
     parts = [
         "# OpenVideoFDB summary",
         "",
         f"Runs: {', '.join(str(r) for r in run_dirs)}  ",
         note,
         "",
-        to_markdown(df, ["provider", "mode"]),
+        to_paper_markdown(df, ["Setting"]),
+        "## With 95 % bootstrap CIs",
+        "",
+        to_markdown(df, ["Model", "Setting"]),
     ]
     if per_dynamic:
         pdf = _per_dynamic_table(run_dirs, judge=judge, n_boot=n_boot, seed=seed, keep=keep)
         pdf.to_csv(out.with_name(out.stem + "_per_dynamic.csv"), index=False)
-        parts += ["## Per dynamic", "", to_markdown(pdf, ["provider", "mode", "dynamic_type"])]
+        parts += ["## Per dynamic", "", to_paper_markdown(pdf, ["Setting", "dynamic_type"]),
+                  "## Per dynamic with 95 % bootstrap CIs", "",
+                  to_markdown(pdf, ["Model", "Setting", "dynamic_type"])]
     out.write_text("\n".join(parts), encoding="utf-8")
     return out
 

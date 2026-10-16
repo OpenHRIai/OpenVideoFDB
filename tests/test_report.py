@@ -65,7 +65,7 @@ def test_summarise(runs):
     assert list(df["provider"]) == ["human_gt", "random"] and list(df["n"]) == [5, 3]     # n = rows
     g = df.iloc[0]
     assert g["Fluency"] == pytest.approx(4.5) and g["Fluency_n"] == 4 and g["Conv. Flow"] == pytest.approx(4.5)
-    assert g["Grounding"] == pytest.approx(3.5) and g["Grounding_n"] == 2
+    assert g["Vis. Ground."] == pytest.approx(3.5) and g["Vis. Ground._n"] == 2
     assert g["Overall"] == pytest.approx((4.5 + 4.5 + 4.5 + 3.5) / 4) and g["Overall_n"] == 4
     assert g["TOR-Align %"] == pytest.approx(300 / 4) and g["TOR-Align %_n"] == 4
     assert g["Latency ms"] == pytest.approx(725.0) and g["Latency ms_n"] == 2
@@ -96,7 +96,7 @@ def test_per_dynamic(runs):
                                            "Laughter", "Pause Handling"]
     ph = df[(df["run"] == "gt") & (df["dynamic_type"] == "Pause Handling")].iloc[0]
     assert ph["n"] == 2 and ph["Conv. Flow"] == pytest.approx(4.5) and ph["TOR-Align %"] == 100.0
-    assert math.isnan(ph["Grounding"])
+    assert math.isnan(ph["Vis. Ground."])
     tt = df[(df["run"] == "gt") & (df["dynamic_type"] == "Turn-taking")].iloc[0]
     assert tt["n"] == 1 and math.isnan(tt["Fluency"]) and tt["TOR-Align %"] == 100.0 and tt["Latency ms"] == 250.0
 
@@ -116,13 +116,20 @@ def test_write_markdown_and_csv(runs, tmp_path):
     gt, rnd = runs
     out = report.write([gt, rnd], per_dynamic=True, out=tmp_path / "results" / "summary.md")
     md = out.read_text()
-    assert md.startswith("# OpenVideoFDB summary") and "| provider | mode | n | Fluency |" in md
-    assert "| human_gt | av | 5 | 4.50 [" in md and "| random | av | 3 | 2.00 [" in md
-    assert "## Per dynamic" in md and "| human_gt | av | Pause Handling | 2 |" in md
-    assert "725 [250, 1200]" in md and "—" in md           # latency CI; missing Grounding for pause-only
+    assert md.startswith("# OpenVideoFDB summary")
+    # paper-notation table first: grouped rows, Model | Setting | n | axes | Overall | Timing
+    assert "| Model | Setting | n | Fluency ↑ | Conv. Flow ↑ | Vis. Ground. ↑ | Overall ↑ | Timing ↑ |" in md
+    assert "| **Human reference** |" in md and "| Human reference | AV2AV | 5 | 4.50 | 4.50 | 3.50 |" in md
+    assert "| **Random baseline** |" in md and "| Random baseline (mismatched partner) | AV2AV | 3 | 2.00 |" in md
+    assert "| 75% / 725 ms |" in md                      # Timing = TOR-Align % / median latency
+    # CI table second
+    assert "## With 95 % bootstrap CIs" in md and "| Model | Setting | n | Fluency |" in md
+    assert "| Human reference | AV2AV | 5 | 4.50 [" in md and "725 [250, 1200]" in md and "—" in md
+    assert "## Per dynamic" in md and "| Human reference | AV2AV | Pause Handling | 2 |" in md
     assert (tmp_path / "results" / "summary.csv").exists()
     assert (tmp_path / "results" / "summary_per_dynamic.csv").exists()
-    assert report.to_markdown(report.summarise([]), ["provider"]).startswith("_(no runs)_")
+    assert report.to_markdown(report.summarise([]), ["Model"]).startswith("_(no runs)_")
+    assert report.to_paper_markdown(report.summarise([])).startswith("_(no runs)_")
 
 
 def test_load_run_selects_judge(runs):
@@ -147,8 +154,21 @@ def test_row_filter_restricts_runs_to_common_rows(runs, tmp_path):
     assert report.row_filter(None) is None and report.row_filter("") is None
     df = report.summarise([gt, rnd], keep=keep)
     assert list(df["n"]) == [3, 2]                                   # gt: a, b, c/generation; random: a, b
-    assert df.iloc[0]["Fluency_n"] == 2 and df.iloc[0]["Grounding_n"] == 0
+    assert df.iloc[0]["Fluency_n"] == 2 and df.iloc[0]["Vis. Ground._n"] == 0
     out = report.write([gt, rnd], per_dynamic=True, out=tmp_path / "s.md", manifest=manifest, rows=2)
     text = out.read_text()
     assert f"Rows restricted to the first 2 rows of {manifest}." in text
     assert "Laughter" not in text.split("## Per dynamic")[1]
+
+
+def test_paper_notation_names_and_settings():
+    assert report.model_name("gemini_live", "gemini-3.1-flash-live-preview") == "Gemini 3.1 Flash Live"
+    assert report.model_name("openai_realtime", "gpt-realtime") == "OpenAI gpt-realtime"
+    assert report.model_name("openai_realtime", "gpt-realtime-mini") == "OpenAI gpt-realtime-mini"
+    assert report.model_name("human_gt", "") == "Human reference"
+    assert report.model_name("newprov", "model-x") == "newprov model-x"
+    assert report.setting("gemini_live", "av") == "AV2A" and report.setting("gemini_live", "a2a") == "A2A"
+    assert report.setting("human_gt", "av") == "AV2AV" and report.setting("tavus", "av") == "AV2AV"
+    assert report.setting("anam", "a2a") == "A2AV"
+    assert report.setting_group("human_gt", "av") == "REF" and report.setting_group("random", "av") == "RANDOM"
+    assert report.setting_group("openai_realtime", "a2a") == "A2A"

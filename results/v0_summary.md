@@ -1,51 +1,105 @@
 # OpenVideoFDB summary
 
 Runs: runs/gt, runs/random, runs/gemini_live_av, runs/gemini_live_a2a, runs/openai_realtime_av, runs/openai_realtime_a2a  
-Judge: gpt-4o. n = manifest rows (clip, bucket) scored. Rows restricted to the first 60 rows of manifest/ovfdb_v0.jsonl. Overall = mean of each perception row's available judge axes. Brackets are 95 % bootstrap CIs over rows (1000 resamples, seed 0). TOR-Align % = fraction of timed rows whose takeover matches the expected class; latency is the median.
+Judge: gpt-4o. n = manifest rows (clip, bucket) scored. Rows restricted to the first 60 rows of manifest/ovfdb_v0.jsonl. Notation follows the VideoFDB project page (Table 1): Setting = <input>2<output> modality (AV2A = frames + audio in, audio out; A2A = same agents, video withheld; AV2AV = video out). Vis. Ground. = the Semantic/Visual Grounding axis. Overall = mean of each perception row's available judge axes. Timing = TOR-Align % (timed rows whose takeover matches the expected class) / median latency ms over timed rows; an agent already talking when the window opens counts as 0 ms, so read latency together with TOR-Align. The second table repeats the metrics with 95 % bootstrap CIs over rows (1000 resamples, seed 0).
 
-| provider | mode | n | Fluency | Conv. Flow | Grounding | Overall | TOR-Align % | Latency ms |
+| Model | Setting | n | Fluency ↑ | Conv. Flow ↑ | Vis. Ground. ↑ | Overall ↑ | Timing ↑ |
+|---|---|---|---|---|---|---|---|
+| **Human reference** | | | | | | | |
+| Human reference | AV2AV | 60 | 4.25 | 4.60 | 3.40 | 4.12 | 100% / 508 ms |
+| **Random baseline** | | | | | | | |
+| Random baseline (mismatched partner) | AV2AV | 60 | 2.55 | 3.40 | 2.30 | 2.70 | 35% / 40 ms |
+| **Full-duplex speech-vision (AV2A)** | | | | | | | |
+| Gemini 3.1 Flash Live | AV2A | 60 | 3.25 | 4.40 | 2.90 | 3.45 | 60% / 704 ms |
+| OpenAI gpt-realtime | AV2A | 60 | 3.05 | 4.50 | 3.40 | 3.50 | 50% / 904 ms |
+| **Audio-only baselines (A2A; same agents, video withheld)** | | | | | | | |
+| Gemini 3.1 Flash Live | A2A | 60 | 3.55 | 4.40 | 3.20 | 3.67 | 58% / 694 ms |
+| OpenAI gpt-realtime | A2A | 60 | 2.50 | 2.90 | 3.30 | 2.80 | 50% / 712 ms |
+
+## With 95 % bootstrap CIs
+
+| Model | Setting | n | Fluency | Conv. Flow | Vis. Ground. | Overall | TOR-Align % | Latency ms |
 |---|---|---|---|---|---|---|---|---|
-| human_gt | av | 60 | 4.25 [3.80, 4.65] | 4.60 [4.00, 5.00] | 3.40 [2.90, 3.90] | 4.12 [3.67, 4.50] | 100 [100, 100] | 508 [304, 652] |
-| random | av | 60 | 2.55 [1.65, 3.35] | 3.40 [2.00, 4.50] | 2.30 [2.00, 2.70] | 2.70 [1.93, 3.42] | 35 [22, 50] | 40 [0, 2176] |
-| gemini_live | av | 60 | 3.25 [2.40, 4.05] | 4.40 [3.40, 5.00] | 2.90 [2.30, 3.60] | 3.45 [2.70, 4.12] | 60 [45, 75] | 704 [264, 1224] |
-| gemini_live | a2a | 60 | 3.55 [2.75, 4.25] | 4.40 [3.40, 5.00] | 3.20 [2.60, 3.70] | 3.67 [3.00, 4.28] | 58 [42, 72] | 694 [246, 1182] |
-| openai_realtime | av | 60 | 3.05 [2.10, 4.00] | 4.50 [3.50, 5.00] | 3.40 [2.70, 4.10] | 3.50 [2.75, 4.25] | 50 [35, 65] | 904 [133, 1928] |
-| openai_realtime | a2a | 60 | 2.50 [1.65, 3.35] | 2.90 [1.80, 4.00] | 3.30 [2.80, 3.70] | 2.80 [2.15, 3.48] | 50 [35, 65] | 712 [600, 872] |
+| Human reference | AV2AV | 60 | 4.25 [3.80, 4.65] | 4.60 [4.00, 5.00] | 3.40 [2.90, 3.90] | 4.12 [3.67, 4.50] | 100 [100, 100] | 508 [304, 652] |
+| Random baseline (mismatched partner) | AV2AV | 60 | 2.55 [1.65, 3.35] | 3.40 [2.00, 4.50] | 2.30 [2.00, 2.70] | 2.70 [1.93, 3.42] | 35 [22, 50] | 40 [0, 2176] |
+| Gemini 3.1 Flash Live | AV2A | 60 | 3.25 [2.40, 4.05] | 4.40 [3.40, 5.00] | 2.90 [2.30, 3.60] | 3.45 [2.70, 4.12] | 60 [45, 75] | 704 [264, 1224] |
+| OpenAI gpt-realtime | AV2A | 60 | 3.05 [2.10, 4.00] | 4.50 [3.50, 5.00] | 3.40 [2.70, 4.10] | 3.50 [2.75, 4.25] | 50 [35, 65] | 904 [133, 1928] |
+| Gemini 3.1 Flash Live | A2A | 60 | 3.55 [2.75, 4.25] | 4.40 [3.40, 5.00] | 3.20 [2.60, 3.70] | 3.67 [3.00, 4.28] | 58 [42, 72] | 694 [246, 1182] |
+| OpenAI gpt-realtime | A2A | 60 | 2.50 [1.65, 3.35] | 2.90 [1.80, 4.00] | 3.30 [2.80, 3.70] | 2.80 [2.15, 3.48] | 50 [35, 65] | 712 [600, 872] |
 
 ## Per dynamic
 
-| provider | mode | dynamic_type | n | Fluency | Conv. Flow | Grounding | Overall | TOR-Align % | Latency ms |
+| Model | Setting | dynamic_type | n | Fluency ↑ | Conv. Flow ↑ | Vis. Ground. ↑ | Overall ↑ | Timing ↑ |
+|---|---|---|---|---|---|---|---|---|
+| **Human reference** | | | | | | | | |
+| Human reference | AV2AV | Laughter | 20 | 4.00 | — | 3.40 | 3.70 | — |
+| Human reference | AV2AV | Pause Handling | 10 | 4.50 | 4.60 | — | 4.55 | 100% / 1016 ms |
+| Human reference | AV2AV | Turn-taking | 10 | — | — | — | — | 100% / 632 ms |
+| Human reference | AV2AV | Verbal Backchanneling | 10 | — | — | — | — | 100% / 304 ms |
+| Human reference | AV2AV | Verbal Interruption | 10 | — | — | — | — | 100% / 636 ms |
+| **Random baseline** | | | | | | | | |
+| Random baseline (mismatched partner) | AV2AV | Laughter | 20 | 2.00 | — | 2.30 | 2.15 | — |
+| Random baseline (mismatched partner) | AV2AV | Pause Handling | 10 | 3.10 | 3.40 | — | 3.25 | 80% / 196 ms |
+| Random baseline (mismatched partner) | AV2AV | Turn-taking | 10 | — | — | — | — | 50% / 0 ms |
+| Random baseline (mismatched partner) | AV2AV | Verbal Backchanneling | 10 | — | — | — | — | 0% / — |
+| Random baseline (mismatched partner) | AV2AV | Verbal Interruption | 10 | — | — | — | — | 10% / 2904 ms |
+| **Full-duplex speech-vision (AV2A)** | | | | | | | | |
+| Gemini 3.1 Flash Live | AV2A | Laughter | 20 | 2.40 | — | 2.90 | 2.65 | — |
+| Gemini 3.1 Flash Live | AV2A | Pause Handling | 10 | 4.10 | 4.40 | — | 4.25 | 90% / 1236 ms |
+| Gemini 3.1 Flash Live | AV2A | Turn-taking | 10 | — | — | — | — | 50% / 1224 ms |
+| Gemini 3.1 Flash Live | AV2A | Verbal Backchanneling | 10 | — | — | — | — | 10% / 0 ms |
+| Gemini 3.1 Flash Live | AV2A | Verbal Interruption | 10 | — | — | — | — | 90% / 260 ms |
+| OpenAI gpt-realtime | AV2A | Laughter | 20 | 1.60 | — | 3.40 | 2.50 | — |
+| OpenAI gpt-realtime | AV2A | Pause Handling | 10 | 4.50 | 4.50 | — | 4.50 | 90% / 904 ms |
+| OpenAI gpt-realtime | AV2A | Turn-taking | 10 | — | — | — | — | 40% / 1640 ms |
+| OpenAI gpt-realtime | AV2A | Verbal Backchanneling | 10 | — | — | — | — | 0% / — |
+| OpenAI gpt-realtime | AV2A | Verbal Interruption | 10 | — | — | — | — | 70% / 133 ms |
+| **Audio-only baselines (A2A; same agents, video withheld)** | | | | | | | | |
+| Gemini 3.1 Flash Live | A2A | Laughter | 20 | 2.80 | — | 3.20 | 3.00 | — |
+| Gemini 3.1 Flash Live | A2A | Pause Handling | 10 | 4.30 | 4.40 | — | 4.35 | 100% / 1668 ms |
+| Gemini 3.1 Flash Live | A2A | Turn-taking | 10 | — | — | — | — | 40% / 1160 ms |
+| Gemini 3.1 Flash Live | A2A | Verbal Backchanneling | 10 | — | — | — | — | 0% / — |
+| Gemini 3.1 Flash Live | A2A | Verbal Interruption | 10 | — | — | — | — | 90% / 223 ms |
+| OpenAI gpt-realtime | A2A | Laughter | 20 | 3.50 | — | 3.30 | 3.40 | — |
+| OpenAI gpt-realtime | A2A | Pause Handling | 10 | 1.50 | 2.90 | — | 2.20 | 80% / 808 ms |
+| OpenAI gpt-realtime | A2A | Turn-taking | 10 | — | — | — | — | 70% / 712 ms |
+| OpenAI gpt-realtime | A2A | Verbal Backchanneling | 10 | — | — | — | — | 0% / 496 ms |
+| OpenAI gpt-realtime | A2A | Verbal Interruption | 10 | — | — | — | — | 50% / 88 ms |
+
+## Per dynamic with 95 % bootstrap CIs
+
+| Model | Setting | dynamic_type | n | Fluency | Conv. Flow | Vis. Ground. | Overall | TOR-Align % | Latency ms |
 |---|---|---|---|---|---|---|---|---|---|
-| human_gt | av | Laughter | 20 | 4.00 [3.50, 4.40] | — | 3.40 [2.90, 3.90] | 3.70 [3.30, 4.05] | — | — |
-| human_gt | av | Pause Handling | 10 | 4.50 [3.60, 5.00] | 4.60 [4.00, 5.00] | — | 4.55 [3.80, 5.00] | 100 [100, 100] | 1016 [1000, 1032] |
-| human_gt | av | Turn-taking | 10 | — | — | — | — | 100 [100, 100] | 632 [456, 1032] |
-| human_gt | av | Verbal Backchanneling | 10 | — | — | — | — | 100 [100, 100] | 304 [270, 304] |
-| human_gt | av | Verbal Interruption | 10 | — | — | — | — | 100 [100, 100] | 636 [516, 900] |
-| random | av | Laughter | 20 | 2.00 [1.20, 2.80] | — | 2.30 [2.00, 2.70] | 2.15 [1.70, 2.60] | — | — |
-| random | av | Pause Handling | 10 | 3.10 [1.60, 4.50] | 3.40 [2.00, 4.50] | — | 3.25 [1.75, 4.50] | 80 [50, 100] | 196 [0, 2176] |
-| random | av | Turn-taking | 10 | — | — | — | — | 50 [20, 80] | 0 [0, 968] |
-| random | av | Verbal Backchanneling | 10 | — | — | — | — | 0 [0, 0] | — |
-| random | av | Verbal Interruption | 10 | — | — | — | — | 10 [0, 30] | 2904 [0, 4133] |
-| gemini_live | av | Laughter | 20 | 2.40 [1.40, 3.20] | — | 2.90 [2.30, 3.60] | 2.65 [1.90, 3.40] | — | — |
-| gemini_live | av | Pause Handling | 10 | 4.10 [2.80, 5.00] | 4.40 [3.40, 5.00] | — | 4.25 [3.20, 5.00] | 90 [70, 100] | 1236 [1064, 1408] |
-| gemini_live | av | Turn-taking | 10 | — | — | — | — | 50 [20, 80] | 1224 [1091, 1544] |
-| gemini_live | av | Verbal Backchanneling | 10 | — | — | — | — | 10 [0, 30] | 0 [0, 0] |
-| gemini_live | av | Verbal Interruption | 10 | — | — | — | — | 90 [70, 100] | 260 [109, 325] |
-| gemini_live | a2a | Laughter | 20 | 2.80 [1.80, 3.60] | — | 3.20 [2.60, 3.70] | 3.00 [2.20, 3.70] | — | — |
-| gemini_live | a2a | Pause Handling | 10 | 4.30 [3.10, 5.00] | 4.40 [3.40, 5.00] | — | 4.35 [3.25, 5.00] | 100 [100, 100] | 1668 [1256, 2080] |
-| gemini_live | a2a | Turn-taking | 10 | — | — | — | — | 40 [10, 70] | 1160 [1064, 1608] |
-| gemini_live | a2a | Verbal Backchanneling | 10 | — | — | — | — | 0 [0, 0] | — |
-| gemini_live | a2a | Verbal Interruption | 10 | — | — | — | — | 90 [70, 100] | 223 [144, 324] |
-| openai_realtime | av | Laughter | 20 | 1.60 [0.50, 2.70] | — | 3.40 [2.70, 4.10] | 2.50 [1.65, 3.30] | — | — |
-| openai_realtime | av | Pause Handling | 10 | 4.50 [3.50, 5.00] | 4.50 [3.50, 5.00] | — | 4.50 [3.50, 5.00] | 90 [70, 100] | 904 [904, 904] |
-| openai_realtime | av | Turn-taking | 10 | — | — | — | — | 40 [10, 70] | 1640 [968, 2696] |
-| openai_realtime | av | Verbal Backchanneling | 10 | — | — | — | — | 0 [0, 0] | — |
-| openai_realtime | av | Verbal Interruption | 10 | — | — | — | — | 70 [40, 90] | 133 [0, 343] |
-| openai_realtime | a2a | Laughter | 20 | 3.50 [2.80, 4.10] | — | 3.30 [2.80, 3.70] | 3.40 [2.95, 3.80] | — | — |
-| openai_realtime | a2a | Pause Handling | 10 | 1.50 [0.00, 3.00] | 2.90 [1.80, 4.00] | — | 2.20 [1.10, 3.45] | 80 [50, 100] | 808 [648, 1000] |
-| openai_realtime | a2a | Turn-taking | 10 | — | — | — | — | 70 [40, 100] | 712 [632, 1128] |
-| openai_realtime | a2a | Verbal Backchanneling | 10 | — | — | — | — | 0 [0, 0] | 496 [496, 496] |
-| openai_realtime | a2a | Verbal Interruption | 10 | — | — | — | — | 50 [20, 80] | 88 [0, 4167] |
+| Human reference | AV2AV | Laughter | 20 | 4.00 [3.50, 4.40] | — | 3.40 [2.90, 3.90] | 3.70 [3.30, 4.05] | — | — |
+| Human reference | AV2AV | Pause Handling | 10 | 4.50 [3.60, 5.00] | 4.60 [4.00, 5.00] | — | 4.55 [3.80, 5.00] | 100 [100, 100] | 1016 [1000, 1032] |
+| Human reference | AV2AV | Turn-taking | 10 | — | — | — | — | 100 [100, 100] | 632 [456, 1032] |
+| Human reference | AV2AV | Verbal Backchanneling | 10 | — | — | — | — | 100 [100, 100] | 304 [270, 304] |
+| Human reference | AV2AV | Verbal Interruption | 10 | — | — | — | — | 100 [100, 100] | 636 [516, 900] |
+| Random baseline (mismatched partner) | AV2AV | Laughter | 20 | 2.00 [1.20, 2.80] | — | 2.30 [2.00, 2.70] | 2.15 [1.70, 2.60] | — | — |
+| Random baseline (mismatched partner) | AV2AV | Pause Handling | 10 | 3.10 [1.60, 4.50] | 3.40 [2.00, 4.50] | — | 3.25 [1.75, 4.50] | 80 [50, 100] | 196 [0, 2176] |
+| Random baseline (mismatched partner) | AV2AV | Turn-taking | 10 | — | — | — | — | 50 [20, 80] | 0 [0, 968] |
+| Random baseline (mismatched partner) | AV2AV | Verbal Backchanneling | 10 | — | — | — | — | 0 [0, 0] | — |
+| Random baseline (mismatched partner) | AV2AV | Verbal Interruption | 10 | — | — | — | — | 10 [0, 30] | 2904 [0, 4133] |
+| Gemini 3.1 Flash Live | AV2A | Laughter | 20 | 2.40 [1.40, 3.20] | — | 2.90 [2.30, 3.60] | 2.65 [1.90, 3.40] | — | — |
+| Gemini 3.1 Flash Live | AV2A | Pause Handling | 10 | 4.10 [2.80, 5.00] | 4.40 [3.40, 5.00] | — | 4.25 [3.20, 5.00] | 90 [70, 100] | 1236 [1064, 1408] |
+| Gemini 3.1 Flash Live | AV2A | Turn-taking | 10 | — | — | — | — | 50 [20, 80] | 1224 [1091, 1544] |
+| Gemini 3.1 Flash Live | AV2A | Verbal Backchanneling | 10 | — | — | — | — | 10 [0, 30] | 0 [0, 0] |
+| Gemini 3.1 Flash Live | AV2A | Verbal Interruption | 10 | — | — | — | — | 90 [70, 100] | 260 [109, 325] |
+| OpenAI gpt-realtime | AV2A | Laughter | 20 | 1.60 [0.50, 2.70] | — | 3.40 [2.70, 4.10] | 2.50 [1.65, 3.30] | — | — |
+| OpenAI gpt-realtime | AV2A | Pause Handling | 10 | 4.50 [3.50, 5.00] | 4.50 [3.50, 5.00] | — | 4.50 [3.50, 5.00] | 90 [70, 100] | 904 [904, 904] |
+| OpenAI gpt-realtime | AV2A | Turn-taking | 10 | — | — | — | — | 40 [10, 70] | 1640 [968, 2696] |
+| OpenAI gpt-realtime | AV2A | Verbal Backchanneling | 10 | — | — | — | — | 0 [0, 0] | — |
+| OpenAI gpt-realtime | AV2A | Verbal Interruption | 10 | — | — | — | — | 70 [40, 90] | 133 [0, 343] |
+| Gemini 3.1 Flash Live | A2A | Laughter | 20 | 2.80 [1.80, 3.60] | — | 3.20 [2.60, 3.70] | 3.00 [2.20, 3.70] | — | — |
+| Gemini 3.1 Flash Live | A2A | Pause Handling | 10 | 4.30 [3.10, 5.00] | 4.40 [3.40, 5.00] | — | 4.35 [3.25, 5.00] | 100 [100, 100] | 1668 [1256, 2080] |
+| Gemini 3.1 Flash Live | A2A | Turn-taking | 10 | — | — | — | — | 40 [10, 70] | 1160 [1064, 1608] |
+| Gemini 3.1 Flash Live | A2A | Verbal Backchanneling | 10 | — | — | — | — | 0 [0, 0] | — |
+| Gemini 3.1 Flash Live | A2A | Verbal Interruption | 10 | — | — | — | — | 90 [70, 100] | 223 [144, 324] |
+| OpenAI gpt-realtime | A2A | Laughter | 20 | 3.50 [2.80, 4.10] | — | 3.30 [2.80, 3.70] | 3.40 [2.95, 3.80] | — | — |
+| OpenAI gpt-realtime | A2A | Pause Handling | 10 | 1.50 [0.00, 3.00] | 2.90 [1.80, 4.00] | — | 2.20 [1.10, 3.45] | 80 [50, 100] | 808 [648, 1000] |
+| OpenAI gpt-realtime | A2A | Turn-taking | 10 | — | — | — | — | 70 [40, 100] | 712 [632, 1128] |
+| OpenAI gpt-realtime | A2A | Verbal Backchanneling | 10 | — | — | — | — | 0 [0, 0] | 496 [496, 496] |
+| OpenAI gpt-realtime | A2A | Verbal Interruption | 10 | — | — | — | — | 50 [20, 80] | 88 [0, 4167] |
 
 ## Notes (2026-10-16, first model results)
 
