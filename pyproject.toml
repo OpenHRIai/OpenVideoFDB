@@ -1,6 +1,6 @@
 [project]
 name = "ovfdb"
-version = "0.0.1"
+version = "0.1.0"
 description = "OpenVideoFDB: an open benchmark harness for full-duplex audio-visual conversational agents (reimplementation of VideoFDB, arXiv 2605.30256)"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -25,6 +25,10 @@ dependencies = [
     "websockets>=12",
     "huggingface-hub>=0.24",
 ]
+
+[project.urls]
+Homepage = "https://github.com/OpenHRIai/OpenVideoFDB"
+Paper = "https://arxiv.org/abs/2605.30256"
 
 [project.optional-dependencies]
 avatar = ["playwright>=1.45"]

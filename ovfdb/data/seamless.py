@@ -8,6 +8,7 @@ URL scheme verified 2026-10-15 against facebookresearch/seamless_interaction
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import subprocess
 from dataclasses import dataclass, fields
@@ -18,6 +19,8 @@ import httpx
 import pandas as pd
 
 from ovfdb.schema import Bucket, DynamicType, Sample, Segment, Word
+
+log = logging.getLogger(__name__)
 
 MIRROR = "https://dl.fbaipublicfiles.com/seamless_interaction"
 FILELIST_URL = (
@@ -462,3 +465,44 @@ def to_sample(user_id: str, partner_id: str, t0: float, t1: float, bucket: Bucke
         source_meta=meta,
         **passthrough,
     )
+
+
+# --- rebuild from a published manifest ---------------------------------------
+
+def rebuild_from_manifest(manifest: str | Path, *, video: bool = True, sbs: bool = False,
+                          limit: int = 0, skip_existing: bool = True) -> dict[str, int]:
+    """Re-create every clip of a published manifest from Meta's public mirror (WS8 manifest-only release).
+
+    Each row carries ``source_meta.{user_file_id, partner_file_id, t0, t1}``; the media are fetched
+    (cached under ``data/seamless/``) and cut deterministically with :func:`trim` into the directory
+    named by ``user_video_path`` (``data/clips*/<clip_id>/``). ``sbs`` also builds the side-by-side
+    composite used by the review page and the captioner. Returns counts.
+    """
+    from ovfdb.schema import read_manifest
+
+    counts = {"rows": 0, "clips": 0, "built": 0, "skipped": 0, "failed": 0}
+    done: set[str] = set()
+    for s in read_manifest(manifest):
+        counts["rows"] += 1
+        if s.clip_id in done:
+            continue
+        done.add(s.clip_id)
+        counts["clips"] += 1
+        if limit and counts["built"] + counts["skipped"] >= limit:
+            break
+        meta = s.source_meta or {}
+        out_dir = Path(s.user_video_path).parent
+        if skip_existing and Path(s.user_audio_path).exists() and (not video or Path(s.user_video_path).exists()):
+            counts["skipped"] += 1
+            continue
+        try:
+            trim(meta["user_file_id"], meta["partner_file_id"], float(meta["t0"]), float(meta["t1"]), out_dir, video=video)
+            if sbs and video:
+                from ovfdb.mine.verify import sbs_composite
+                sbs_composite(out_dir / "user.mp4", out_dir / "partner.mp4", out_dir / "sbs.mp4")
+            counts["built"] += 1
+        except Exception as e:  # noqa: BLE001 - keep going; report at the end
+            counts["failed"] += 1
+            log.warning("%s: rebuild failed: %s", s.clip_id, e)
+    return counts
+

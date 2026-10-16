@@ -95,6 +95,18 @@ def nvidia_manifest(split: str = "validation", out: str = ""):
 
 
 @app.command()
+def rebuild(manifest: str = "manifest/ovfdb_v0.jsonl", no_video: bool = False, sbs: bool = False, limit: int = 0):
+    """WS8: re-create the clips of a published manifest from Meta's public Seamless mirror (no media in git).
+
+    Fetches each pair's audio/video once (cached in data/seamless/) and cuts [t0, t1] deterministically into
+    data/clips*/<clip_id>/. --sbs also builds the side-by-side composite (review page, captioner).
+    """
+    from ovfdb.data.seamless import rebuild_from_manifest  # WS8
+    c = rebuild_from_manifest(manifest, video=not no_video, sbs=sbs, limit=limit)
+    typer.echo(f"{manifest}: {c['clips']} clips in {c['rows']} rows -> built {c['built']}, skipped {c['skipped']}, failed {c['failed']}")
+
+
+@app.command()
 def mine(dynamics: str = "all", limit: int = 0, label: str = "naturalistic", split: str = "test",
          manifest: str = "manifest/ovfdb_v0.jsonl", verify: bool = True, workers: int = 2, scan: int = 60,
          per_pair: int = 3, max_pairs: int = 0, max_minutes: float = 0.0, require_3p: bool = False,
