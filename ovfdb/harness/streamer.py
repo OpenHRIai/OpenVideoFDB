@@ -241,6 +241,11 @@ def _make_gemini(sample: Sample, samples: list[Sample], model: str) -> Agent:
     return GeminiLive(model=model) if model else GeminiLive()
 
 
+def _make_openai_realtime(sample: Sample, samples: list[Sample], model: str) -> Agent:
+    from ovfdb.harness.providers.openai_realtime import OpenAIRealtime
+    return OpenAIRealtime(model=model) if model else OpenAIRealtime()
+
+
 def _make_human_gt(sample: Sample, samples: list[Sample], model: str) -> Agent:
     from ovfdb.harness.providers.human_gt import HumanGT
     return HumanGT(sample)
@@ -255,6 +260,7 @@ def _make_random(sample: Sample, samples: list[Sample], model: str) -> Agent:
 #: provider name → factory(sample, all_samples, model) -> Agent (one agent per clip).
 PROVIDERS: dict[str, Callable[[Sample, list[Sample], str], Agent]] = {
     "gemini_live": _make_gemini,
+    "openai_realtime": _make_openai_realtime,
     "human_gt": _make_human_gt,
     "random": _make_random,
 }

@@ -17,7 +17,7 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
 | WS3 harness (Gemini Live) | done | agent (session 1) | 2026-10-15 | streamer/recorder/human_gt/random/gemini_live; live smoke OK on `gemini-3.1-flash-live-preview` (AV + a2a), drift < 40 ms, no errors. `scripts/smoke_gemini_live.py` |
 | WS4 scoring: ASR + timing | done | agent (session 1) | 2026-10-15 | segments/timing/asr/pipeline; 31 tests; faster-whisper small.en int8 ≈ 8× RT. `timing.json` carries all judge blocks except caption/user words |
 | WS5 judge + calibration | judge done; calibration pending | agent (session 1) | 2026-10-15 | rubrics verbatim, judge (gpt-4o/claude/gemini backends), report w/ bootstrap CIs; gpt-4o good=5 / bad=1 on synthetic Pause Handling. ≈$0.01/clip. Calibration needs WS2 manifest |
-| WS6 providers: OpenAI RT, Tavus/Anam, gen judge | 6a OpenAI Realtime in progress | agent (session 1) | 2026-10-15 | Tavus/Anam + generation judge still todo |
+| WS6 providers: OpenAI RT, Tavus/Anam, gen judge | 6a done; 6b/6c todo | agent (session 1) | 2026-10-15 | openai_realtime provider live-verified (gpt-realtime, -mini; AV via input_image items, 1 fps). Tavus/Anam + generation judge still todo |
 | WS7 NVIDIA adapter | blocked (external) | — | 2026-10-15 | access requested 2026-10-15, awaiting approval; **not on the critical path** — all other WS run on Seamless |
 | WS8 report + publish | todo | — | — | last |
 
@@ -36,6 +36,7 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
 - Scoring was per clip dir, losing the perception row of clips shared across buckets (6 Laughter clips). Fix in progress: outputs per (clip, bucket).
 
 ## Open questions
+- OpenAI Realtime: video is item-based (one image per frame, seen at next response), not a continuous stream like Gemini Live; gpt-realtime speaks spontaneously on the first TTS pause while -mini needs the text kick. Report per model.
 - Agent replies often run past `clip + tail_s` (default 5 s). Consider `tail_s=8–10` for real runs; agent.wav is truncated to the window by design.
 - Recorder uses playback-queue placement (Gemini bursts audio faster than real time); `t_received` of the *first* chunk of a burst is the onset. Document in protocol §8 once calibrated.
 - Which provider API keys are available? (fugubook `.env` has TAVUS/ANAM/OPENAI/GOOGLE per survey.)
