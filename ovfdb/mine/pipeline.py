@@ -32,12 +32,14 @@ from dotenv import load_dotenv
 from ovfdb.data import seamless as sm
 from ovfdb.mine import clip as C
 from ovfdb.mine import dialogue as D
+from ovfdb.mine import nonverbal as NV
 from ovfdb.mine import verify as V
 from ovfdb.schema import Bucket, DynamicType, Sample, read_manifest, write_manifest
 
 log = logging.getLogger("ovfdb.mine")
 
 DAY1_DYNAMICS = tuple(D.FINDERS)
+DAY2_DYNAMICS = tuple(NV.FINDERS)      # nonverbal (movement features + 3P-V + Gemini event pass)
 CLIP_ROOT = Path("data/clips")
 REJECTED_DIR = Path("data/mining/rejected")
 SCAN_DEFAULT = 60
@@ -45,8 +47,14 @@ MIN_WINDOW_SEP = 4.0      # two candidates of the same dynamic in one pair must 
 
 
 def parse_dynamics(spec: str) -> list[DynamicType]:
+    """'all' = the day-1 dialogue dynamics, 'nonverbal' = the day-2 ones, 'everything' = both,
+    otherwise a comma list of enum names (pause_handling) or values ("Pause Handling")."""
     if spec in ("", "all"):
         return list(DAY1_DYNAMICS)
+    if spec == "nonverbal":
+        return list(DAY2_DYNAMICS)
+    if spec == "everything":
+        return list(DAY1_DYNAMICS) + list(DAY2_DYNAMICS)
     out = []
     for name in spec.split(","):
         key = name.strip().upper().replace("-", "_").replace(" ", "_")
@@ -67,20 +75,25 @@ class PairData:
     vad: dict[str, list]
     utts: dict[str, list]
     cands: list[D.Candidate] = field(default_factory=list)
+    anns: dict[str, list] = field(default_factory=dict)     # 3P-V annotations per file (may be empty)
+    events: dict[str, list] | None = None                   # nonverbal events per file, once computed
 
     def frame(self, user_role: str) -> tuple[str, str]:
         return (self.a, self.b) if user_role == "a" else (self.b, self.a)
 
 
-def load_pair(a: str, b: str) -> PairData | None:
-    ga, gb = sm.fetch(a, ("vad", "transcript")), sm.fetch(b, ("vad", "transcript"))
+def load_pair(a: str, b: str, with_3p: bool = False) -> PairData | None:
+    kinds = ("vad", "transcript", "3P-V") if with_3p else ("vad", "transcript")
+    ga, gb = sm.fetch(a, kinds), sm.fetch(b, kinds)
     if any(k not in g for g in (ga, gb) for k in ("vad", "transcript")):
         return None
     if not sm.pair_is_consistent(a, b):
         return None
+    anns = {fid: sm.read_annotations(g["3P-V"]) for fid, g in ((a, ga), (b, gb)) if "3P-V" in g}
     return PairData(a, b,
                     {a: sm.read_vad(ga["vad"]), b: sm.read_vad(gb["vad"])},
-                    {a: sm.read_transcript(ga["transcript"]), b: sm.read_transcript(gb["transcript"])})
+                    {a: sm.read_transcript(ga["transcript"]), b: sm.read_transcript(gb["transcript"])},
+                    anns=anns)
 
 
 def select_candidates(cands: list[D.Candidate], need: dict[tuple[DynamicType, Bucket], int],
@@ -205,10 +218,50 @@ def laughter_candidates(pd: PairData, wanted_roles: tuple[str, ...] = ("a", "b")
     return out
 
 
+def nonverbal_candidates(pd: PairData, wanted: set[DynamicType]) -> list[D.Candidate]:
+    """Fetch both videos, run the Gemini event pass (+ 3P-V + movement events) once per pair
+    (cached on ``pd.events``), then the pure nonverbal finders with both role assignments."""
+    if pd.events is None:
+        media = {fid: sm.fetch(fid, ("video",)) for fid in (pd.a, pd.b)}
+        if any("video" not in m for m in media.values()):
+            log.warning("  no video for %s / %s; skipping nonverbal pass", pd.a, pd.b)
+            pd.events = {pd.a: [], pd.b: []}
+            return []
+        pd.events = NV.events_for_pair(pd.a, pd.b, media[pd.a]["video"], media[pd.b]["video"], anns=pd.anns)
+        log.info("  nonverbal events: %s", {fid: Counter(e.kind for e in ev).most_common(6) for fid, ev in pd.events.items()})
+    return NV.find_all(pd.events[pd.a], pd.vad[pd.a], pd.utts[pd.a], pd.events[pd.b], pd.vad[pd.b], pd.utts[pd.b],
+                       dynamics=wanted)
+
+
+def group_works(chosen: list[D.Candidate], pd: PairData, media: dict[str, float],
+                need: dict[tuple[DynamicType, Bucket], int]) -> dict[tuple, Work]:
+    """Clip bounds per candidate, grouped by (user file, window) so a clip shared by two
+    buckets is trimmed once. A clip can hold only one dynamic per bucket (manifest rows are
+    keyed by (clip_id, bucket)); on a collision the scarcer dynamic keeps the window."""
+    works: dict[tuple, Work] = {}
+    ordered = sorted(chosen, key=lambda c: -need.get((c.dynamic_type, c.bucket), 0))
+    for c in ordered:
+        uid, pid = pd.frame(c.user_role)
+        turns = D.turns(pd.vad[uid], pd.utts[uid], pd.vad[pid], pd.utts[pid])
+        b = C.clip_bounds(c, turns, min(media[uid], media[pid]), pd.vad[pid])
+        if b.dur < 5 or b.t0 < 0 or b.ds < b.t0 or b.de > b.t1:
+            continue    # e.g. a movement event at the very start of the file, inside the edge margin
+        key = C.window_key(uid, b)
+        if key in works:
+            if any(x.bucket is c.bucket for x in works[key].cands):
+                continue
+            works[key].cands.append(c)
+        else:
+            works[key] = Work(pd, [c], b, 0)
+    return works
+
+
 def run(dynamics: str = "all", limit: int = 0, label: str = "naturalistic", split: str = "test",
         manifest: str = "manifest/ovfdb_v0.jsonl", verify: bool = True, workers: int = 2,
-        scan: int = SCAN_DEFAULT, per_pair: int = 3, max_pairs: int = 0, max_minutes: float = 0.0) -> Counter:
-    """Mine clips into ``manifest``. ``limit`` = max clips per (dynamic, bucket); 0 = no cap."""
+        scan: int = SCAN_DEFAULT, per_pair: int = 3, max_pairs: int = 0, max_minutes: float = 0.0,
+        require_3p: bool = False) -> Counter:
+    """Mine clips into ``manifest``. ``limit`` = max clips per (dynamic, bucket); 0 = no cap.
+    ``require_3p`` restricts the scan to pairs with third-party (3P-V) annotations."""
     load_dotenv()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
     for noisy in ("httpx", "httpcore", "google_genai", "google_genai.models", "openai", "urllib3"):
@@ -217,6 +270,9 @@ def run(dynamics: str = "all", limit: int = 0, label: str = "naturalistic", spli
     wanted = parse_dynamics(dynamics)
     keys = [(d, b) for d in wanted for b in (Bucket.PERCEPTION, Bucket.GENERATION)
             if (d, b) in V.PARTNER_EXPECTATION]
+    dialogue_wanted = {d for d in wanted if d in D.FINDERS and d is not DynamicType.LAUGHTER}
+    nv_wanted = {d for d in wanted if d in NV.FINDERS}
+    nv_keys = [k for k in keys if k[0] in nv_wanted]
 
     manifest_path = Path(manifest)
     samples = read_manifest(manifest_path) if manifest_path.exists() else []
@@ -231,18 +287,17 @@ def run(dynamics: str = "all", limit: int = 0, label: str = "naturalistic", spli
         return {k: max(0, cap - have[k]) for k in keys}
 
     # --- 1. scan + rank pairs (media already on disk first)
-    all_pairs = sm.pairs(label, split)
+    all_pairs = sm.pairs(label, split, require_3p)
     def local(p):
         return all(sm.local_path(f, "video", label, split).exists() for f in p)
     all_pairs.sort(key=lambda p: not local(p))
     scanned: list[PairData] = []
     for a, b in all_pairs[: max(scan, 1)]:
-        pd = load_pair(a, b)
+        pd = load_pair(a, b, with_3p=bool(nv_wanted))
         if pd is None:
             counts[("pairs_rejected",)] += 1
             continue
-        pd.cands = D.find_all(pd.vad[a], pd.utts[a], pd.vad[b], pd.utts[b],
-                              dynamics={d for d in wanted if d is not DynamicType.LAUGHTER})
+        pd.cands = D.find_all(pd.vad[a], pd.utts[a], pd.vad[b], pd.utts[b], dynamics=dialogue_wanted) if dialogue_wanted else []
         scanned.append(pd)
     for pd in scanned:
         for c in pd.cands:
@@ -256,6 +311,13 @@ def run(dynamics: str = "all", limit: int = 0, label: str = "naturalistic", spli
         v = sum(min(got[k], per_pair, n[k]) for k in keys if n[k] > 0)
         if (DynamicType.LAUGHTER, Bucket.PERCEPTION) in n and n[(DynamicType.LAUGHTER, Bucket.PERCEPTION)] > 0:
             v += 0.5   # laughter is unknown until the audio pass; any pair may have it
+        if pd.events is not None:
+            got_nv = Counter((c.dynamic_type, c.bucket) for c in nonverbal_candidates(pd, nv_wanted))
+            v += sum(min(got_nv[k], per_pair, n[k]) for k in nv_keys if n[k] > 0)
+        elif any(n[k] > 0 for k in nv_keys):
+            v += 0.5   # nonverbal events are unknown until the video pass
+            if (DynamicType.ADAPTOR_HANDLING, Bucket.PERCEPTION) in nv_keys and pd.anns:
+                v += 0.3   # 3P-V text is a cheap adaptor source
         return v + (0.1 if local((pd.a, pd.b)) else 0.0)
 
     # --- 2. process pairs
@@ -283,6 +345,18 @@ def run(dynamics: str = "all", limit: int = 0, label: str = "naturalistic", spli
             counts[("found", DynamicType.LAUGHTER, Bucket.PERCEPTION)] += sum(1 for c in lc if c.bucket is Bucket.PERCEPTION)
             counts[("found", DynamicType.LAUGHTER, Bucket.GENERATION)] += sum(1 for c in lc if c.bucket is Bucket.GENERATION)
             cands += lc
+        if nv_wanted and any(n[k] > 0 for k in nv_keys):
+            fresh = pd.events is None
+            try:
+                nc = nonverbal_candidates(pd, nv_wanted)
+            except Exception as e:  # noqa: BLE001 - a failed video pass must not kill the run
+                log.warning("  nonverbal pass failed for %s / %s: %s", pd.a, pd.b, e)
+                pd.events = {pd.a: [], pd.b: []}
+                nc = []
+            if fresh:
+                for c in nc:
+                    counts[("found", c.dynamic_type, c.bucket)] += 1
+            cands += nc
         chosen = select_candidates(cands, n, per_pair)
         if not chosen:
             continue
@@ -301,18 +375,7 @@ def run(dynamics: str = "all", limit: int = 0, label: str = "naturalistic", spli
         if not media:
             continue
         # clip bounds, grouped by window so a clip shared by two buckets is trimmed once
-        works: dict[tuple, Work] = {}
-        for c in chosen:
-            uid, pid = pd.frame(c.user_role)
-            turns = D.turns(pd.vad[uid], pd.utts[uid], pd.vad[pid], pd.utts[pid])
-            b = C.clip_bounds(c, turns, min(media[uid], media[pid]), pd.vad[pid])
-            if b.dur < 5 or b.t0 < 0:
-                continue
-            key = C.window_key(uid, b)
-            if key in works:
-                works[key].cands.append(c)
-            else:
-                works[key] = Work(pd, [c], b, 0)
+        works = group_works(chosen, pd, media, n)
         index_map = C.assign_clip_indices(list(works), index_map)
         todo = []
         for key, w in works.items():

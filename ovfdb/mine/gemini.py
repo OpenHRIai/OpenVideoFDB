@@ -32,12 +32,18 @@ def client():
     return _client
 
 
-def _media_part(path: Path, mime: str):
+def _media_part(path: Path, mime: str, fps: float | None = None):
+    """Inline or Files-API part. ``fps`` (video only) sets the model's frame
+    sampling rate (default 1 fps) via ``VideoMetadata``; nods and glances need 3-5."""
     from google.genai import types
 
+    meta = types.VideoMetadata(fps=fps) if fps and mime.startswith("video/") else None
     data = path.read_bytes()
     if len(data) <= INLINE_LIMIT:
-        return types.Part.from_bytes(data=data, mime_type=mime), None
+        part = types.Part.from_bytes(data=data, mime_type=mime)
+        if meta is not None:
+            part.video_metadata = meta
+        return part, None
     c = client()
     f = c.files.upload(file=str(path), config={"mime_type": mime})
     while f.state and f.state.name == "PROCESSING":
@@ -45,6 +51,8 @@ def _media_part(path: Path, mime: str):
         f = c.files.get(name=f.name)
     if f.state and f.state.name == "FAILED":
         raise RuntimeError(f"Files API processing failed for {path}")
+    if meta is not None:
+        return types.Part(file_data=types.FileData(file_uri=f.uri, mime_type=mime), video_metadata=meta), f.name
     return f, f.name
 
 
@@ -64,20 +72,23 @@ def parse_json(text: str):
 
 
 def generate(prompt: str, media: Path | None = None, mime: str = "video/mp4", json_out: bool = True,
-             model: str = MODEL, retries: int = 3, temperature: float = 0.2) -> tuple[object, dict]:
-    """One generate_content call. Returns (parsed JSON or text, usage dict)."""
+             model: str = MODEL, retries: int = 3, temperature: float = 0.2,
+             fps: float | None = None, thinking_budget: int | None = None) -> tuple[object, dict]:
+    """One generate_content call. Returns (parsed JSON or text, usage dict).
+    ``thinking_budget=0`` disables thinking (5x faster on video event listing)."""
     from google.genai import types
 
     c = client()
     part, uploaded = (None, None)
     contents = []
     if media is not None:
-        part, uploaded = _media_part(Path(media), mime)
+        part, uploaded = _media_part(Path(media), mime, fps=fps)
         contents.append(part)
     contents.append(prompt)
     cfg = types.GenerateContentConfig(
         temperature=temperature,
         response_mime_type="application/json" if json_out else "text/plain",
+        thinking_config=types.ThinkingConfig(thinking_budget=thinking_budget) if thinking_budget is not None else None,
     )
     try:
         last = None

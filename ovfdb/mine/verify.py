@@ -67,6 +67,40 @@ PARTNER_EXPECTATION: dict[tuple[DynamicType, Bucket], str] = {
         "the USER audibly/visibly laughs in the window in reaction to what the PARTNER just said",
     (DynamicType.LAUGHTER, Bucket.GENERATION):
         "the USER laughs during their own turn and the PARTNER reacts (laughs or smiles back) within ~2 s",
+    # --- day 2: nonverbal dynamics (docs/protocol.md §1; paper App. C.2 timing classes)
+    (DynamicType.NONVERBAL_BACKCHANNELING, Bucket.PERCEPTION):
+        "the PARTNER is mid-turn (talking before, during and after the window) and the USER, who is listening, "
+        "visibly nods / smiles / raises eyebrows inside the window as listener feedback WITHOUT taking the floor "
+        "(at most a short 'mhm'); the PARTNER keeps talking. A nod while the USER is the one speaking does not count",
+    (DynamicType.NONVERBAL_BACKCHANNELING, Bucket.GENERATION):
+        "the USER is mid-turn and the PARTNER, listening, visibly nods / smiles / raises eyebrows inside the window "
+        "(optionally with a short 'mhm') without taking the floor; the USER keeps talking",
+    (DynamicType.FACE_EMOTION_DISPLAY, Bucket.PERCEPTION):
+        "the USER shows a clearly visible facial expression with affect (smile, grin, grimace, frown, surprise, concern) "
+        "inside the window, and the PARTNER then replies in an affectively congruent way (warm reply to a smile, "
+        "concern to a frown) within a few seconds; a neutral face or a mere mouth movement while talking does not count",
+    (DynamicType.FACE_EMOTION_DISPLAY, Bucket.GENERATION):
+        "the USER shows a clearly visible facial expression with affect inside the window and the PARTNER visibly "
+        "mirrors it in face and/or voice (smiles back, nods warmly, shows concern) starting within ~2.5 s of the "
+        "USER's expression; the clip is useless if the PARTNER's face stays neutral",
+    (DynamicType.EMOTION_MATCHING, Bucket.GENERATION):
+        "the USER shows affect (smile/laugh = positive, frown/grimace/concern = negative) at the start of the window "
+        "and the PARTNER's face and/or voice take on the SAME affect within ~2 s, still inside the window; "
+        "the PARTNER merely continuing to listen neutrally is NOT a match",
+    (DynamicType.GAZE_AVOIDANCE_WITH_PAUSE, Bucket.PERCEPTION):
+        "the USER pauses mid-thought (not finished speaking) AND looks away from the PARTNER (up, down or sideways) "
+        "during the pause as a thinking cue, then resumes the same thought; the PARTNER stays silent through the pause "
+        "(a short backchannel is fine). A pause with the USER still looking at the PARTNER is Pause Handling, not this",
+    (DynamicType.ADAPTOR_HANDLING, Bucket.PERCEPTION):
+        "the USER makes a self-directed, non-communicative gesture inside the window (scratches, rubs face/head/neck, "
+        "adjusts hair or glasses, fidgets with clothing) that carries no conversational meaning; the PARTNER does not "
+        "react to it and, if the PARTNER was talking, keeps talking. Hand gestures that illustrate speech, pointing "
+        "or waving do NOT count",
+    (DynamicType.NONVERBAL_INTERRUPTION, Bucket.PERCEPTION):
+        "the PARTNER is mid-sentence when the USER, still silent, makes a visible interruption gesture at the start of "
+        "the window (raised hand / palm, head shake, 'stop' / 'wait' gesture, leaning in with a pointed finger); the "
+        "PARTNER then stops talking within ~1.5 s and the USER takes the floor. A nod, smile or a gesture made while "
+        "the USER is already talking does NOT count",
 }
 
 
@@ -112,7 +146,11 @@ def build_prompt(dynamic: DynamicType, bucket: Bucket, ds: float, de: float, dur
     ev = ""
     if evidence:
         keep = {k: v for k, v in evidence.items() if k in ("text_before", "text_after", "backchannel_text", "a_text",
-                                                           "b_text", "b_text_before", "gap_s", "handoff_gap_s", "b_stop_s")}
+                                                           "b_text", "b_text_before", "gap_s", "handoff_gap_s", "b_stop_s",
+                                                           "event", "partner_event", "mode", "lag_s", "mirror_lag_s")}
+        for k in ("event", "partner_event"):
+            if isinstance(keep.get(k), dict):   # event times are raw-file seconds; show the kind + note only
+                keep[k] = {kk: vv for kk, vv in keep[k].items() if kk in ("kind", "note", "source")}
         if keep:
             ev = "Rule evidence from VAD/ASR (may be wrong): " + json.dumps(keep, ensure_ascii=False) + "\n"
     return (
