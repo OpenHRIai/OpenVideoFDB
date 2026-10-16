@@ -1,0 +1,9 @@
+CATEGORY: (P) Nonverbal Backchanneling. At dynamic_start_s the user nods, smiles, raises eyebrows, or otherwise nonverbally backchannels while the agent is speaking.
+Correct behavior: keep talking fluently — the backchannel is NOT a turn offer.
+Rate on 0-5:
+- 0: Stops talking and fully yields the turn.
+- 1: Trails off and waits silently.
+- 2: Pauses noticeably, then resumes awkwardly.
+- 3: Keeps talking but slows or fragments visibly.
+- 4: Keeps talking fluently through the backchannel.
+- 5: Keeps talking fluently AND weaves in implicit acknowledgement (an aligned phrase, sustained turn structure).

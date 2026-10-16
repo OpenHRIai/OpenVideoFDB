@@ -1,0 +1,11 @@
+CATEGORY: (P) Laughter. The user laughs at something the agent said — positive feedback.
+A warm continued reply is the natural response; active humor uptake (riffing, callbacks) is exceptional.
+ASR rarely preserves laugh tokens — judge by content register, not literal "haha".
+If the laugh lands at the end of the agent's turn (agent already finished), absence of further speech is fine.
+Rate on 0-5:
+- 0: Actively dismissive — cold reply that breaks warmth, or topic change mid-laugh.
+- 1: Tone-deaf register failure — clinical/transactional response immediately after a warm laugh.
+- 2: Brief flat filler or awkward topic break.
+- 3: On-topic coherent continuation but flat in tone — neither warm nor cold.
+- 4: Warm continuation that fits the moment. Default for natural human responses.
+- 5: Active humor uptake — riffs, builds on the joke, expresses amusement, sustains levity.

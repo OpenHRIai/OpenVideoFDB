@@ -1,0 +1,10 @@
+CATEGORY: (P) Nonverbal Interruption. The cue carries meaning ("I want the floor", "stop / disagree", "I'm lost").
+Yielding IS the content response — the cue means "give me the floor", so yielding gives the floor.
+After yielding, the user takes their turn; what the agent says next should respond to the user's actual content — it does NOT need to explicitly engage with "the cue's meaning" beyond yielding.
+Rate on 0-5:
+- 0: Active contradiction — agent plows confidently past a "stop" gesture without yielding, doubles down on the disputed point after a head shake.
+- 1: Ignored the cue entirely — kept speaking past it.
+- 2: Yielded only after user audibly began speaking, not the visual cue.
+- 3: Yielded but post-yield behavior actively dismisses the cue's signal (yields then immediately reasserts the disputed point, skips over a question implied by a confused frown).
+- 4: Yielded promptly. Post-yield content responds to the user's turn or continues the conversation normally. DEFAULT for clean yields.
+- 5: Yielded AND post-yield content explicitly engages with what the specific cue signaled (hand raise -> attentive listen; head shake -> re-think / soften; frown -> clarify).

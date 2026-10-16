@@ -1,0 +1,10 @@
+CATEGORY: (P) Face Emotion Display (also Emotion Matching). At dynamic_start_s the user displays a visible facial expression. The agent's response should be affectively congruent.
+The natural-human floor is score 4: a warm reply in fitting register, on-topic continuation, and NO need to mention the expression.
+Score 3 is reserved for register failures (stilted, jarring, mistimed) — not for "didn't address the emotion."
+Rate on 0-5:
+- 0: Affectively contradicts the expression (cheerful joke to distress, sympathy to a smile).
+- 1: Tone-deaf register failure — transactional/clinical reply during an emotional moment.
+- 2: Generic + register doesn't fit (flat to a warm expression, abrupt to a sad one).
+- 3: Register off — stilted delivery, jarring topic shift, or affect intensity mismatched. NOT for "didn't narrate the cue."
+- 4: Warm tone match + on-topic continuation. Default for natural human responses without cue narration.
+- 5: Specific affective resonance — content mirrors or builds on the user's emotional state (matching excitement, attentive softness after sadness, riffing on amusement). No narration required.

@@ -3,20 +3,27 @@
 `score_timing(run_dir)`: for every `runs/<name>/<clip_id>/` holding `run.json`
 (an `AgentRun`) and `agent.wav`, run ASR -> segments -> overlap / yield /
 timing, write `timing.json` per clip and `timing_summary.json` at the run root.
-`score(...)` (WS5) adds the LLM judge on top; it is a stub here.
+`score(run_dir, judge, axes)` (WS5) runs `score_timing` then the perception LLM
+judge over every clip, writing `judge.json` per clip and `judge_summary.json`.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import asdict
 from functools import lru_cache
 from pathlib import Path
+from statistics import mean, stdev
 
-from ovfdb.schema import AgentRole, AgentRun, Sample, TimingClass, read_manifest
+from ovfdb.schema import AgentRole, AgentRun, Axis, Bucket, Sample, TimingClass, read_manifest
 from ovfdb.score import asr
+from ovfdb.score import judge as judge_mod
 from ovfdb.score.segments import format_partition, partition, words_to_segments
 from ovfdb.score.timing import TimingResult, aggregate, evaluate, overlap_summary, yield_analysis
+
+log = logging.getLogger(__name__)
+DEFAULT_MANIFEST = "manifest/ovfdb_v0.jsonl"
 
 
 @lru_cache(maxsize=8)
@@ -156,7 +163,116 @@ def score_timing(run_dir: str | Path, manifest: str | None = None, *, asr_model:
     return summary
 
 
-def score(run_dir: str | Path, judge: str = "gpt-4o", axes: str = "all", manifest: str | None = None) -> dict:
-    """WS5: timing + LLM judge. Timing part runs; the judge is not implemented yet."""
-    score_timing(run_dir, manifest=manifest)
-    raise NotImplementedError("WS5 judge")
+def _resolve_manifest(run_dir: Path, manifest: str | None) -> str | None:
+    """Explicit arg -> run.json meta -> <run_dir>/manifest.jsonl -> manifest/ovfdb_v0.jsonl."""
+    if manifest and Path(manifest).exists():
+        return str(manifest)
+    for clip_dir in iter_clip_dirs(run_dir):
+        m = _load_run(clip_dir / "run.json").meta.get("manifest")
+        if m and Path(m).exists():
+            return str(m)
+        break
+    for cand in (run_dir / "manifest.jsonl", Path(DEFAULT_MANIFEST)):
+        if cand.exists():
+            return str(cand)
+    return manifest
+
+
+def _parse_axes(axes: str | None) -> set[Axis] | None:
+    if axes in (None, "", "all"):
+        return None
+    return {Axis(a.strip()) for a in str(axes).split(",") if a.strip()}
+
+
+def _stats(values: list[float]) -> dict:
+    n = len(values)
+    return {"mean": mean(values) if n else None, "sd": stdev(values) if n > 1 else (0.0 if n else None), "n": n}
+
+
+def _clip_judge_payload(sample: Sample, run: AgentRun, judge: str, results: dict[str, judge_mod.JudgeResult],
+                        skipped_axes: list[str], existing: dict | None) -> dict:
+    axes = {a: {"rating": r.rating, "analysis": r.analysis, "reasoning": r.reasoning, "rubric": r.rubric,
+                "cached": r.cached, "usage": r.usage} for a, r in results.items()}
+    overall = mean(r.rating for r in results.values()) if results else None
+    block = {"judge": judge, "axes": axes, "overall": overall, "skipped_axes": skipped_axes}
+    by_judge = dict((existing or {}).get("by_judge") or {})
+    by_judge[judge] = block
+    return {
+        "clip_id": sample.clip_id, "provider": run.provider, "mode": run.mode, "bucket": sample.bucket.value,
+        "dynamic_type": sample.dynamic_type.value, "agent_role": sample.agent_role.value,
+        "has_caption": bool((sample.av_caption or "").strip()),
+        **block, "by_judge": by_judge,
+    }
+
+
+def score(run_dir: str | Path, judge: str = judge_mod.DEFAULT_JUDGE, axes: str = "all",
+          manifest: str | None = None, *, force: bool = False) -> dict:
+    """WS5: `score_timing` (reuses timing.json) + perception judge on every clip.
+
+    `axes` is "all" or a comma list of axis values (e.g. "fluency,conversational_flow"); generation
+    axes and generation-bucket clips are skipped with a note. Writes `<clip>/judge.json` (results of
+    this judge at top level, every judge so far under `by_judge`) and `<run_dir>/judge_summary.json`:
+    per-axis mean/sd/n per dynamic and overall, per-clip `overall` = mean of its axes, token usage.
+    """
+    run_dir = Path(run_dir)
+    manifest = _resolve_manifest(run_dir, manifest)
+    timing_summary = score_timing(run_dir, manifest=manifest)
+    wanted = _parse_axes(axes)
+    clips: list[dict] = []
+    skipped: list[dict] = list(timing_summary.get("skipped", []))
+    usage = {"prompt_tokens": 0, "completion_tokens": 0, "n_calls": 0, "n_cached": 0}
+    for clip_dir in iter_clip_dirs(run_dir):
+        tpath = clip_dir / "timing.json"
+        if not tpath.exists():
+            continue                      # score_timing already recorded why it was skipped
+        timing_json = json.loads(tpath.read_text())
+        run = _load_run(clip_dir / "run.json")
+        man = run.meta.get("manifest") or manifest
+        sample = _samples_by_id(str(man)).get(run.clip_id) if man and Path(man).exists() else None
+        if sample is None:
+            skipped.append({"clip_id": run.clip_id, "reason": f"clip not in manifest {man!r}"})
+            continue
+        if sample.bucket is not Bucket.PERCEPTION:
+            skipped.append({"clip_id": run.clip_id, "reason": f"{sample.bucket.value} bucket: perception judge n/a"})
+            continue
+        sel = [a for a in sample.axes if wanted is None or a in wanted]
+        skipped_axes = [a.value for a in sample.axes if a not in judge_mod.PERCEPTION_AXES]
+        results = judge_mod.score_sample(sample, timing_json, judge, axes=sel, cache_dir=clip_dir / "judge",
+                                         force=force)
+        for r in results.values():
+            if r.cached:
+                usage["n_cached"] += 1
+            else:
+                for k in ("prompt_tokens", "completion_tokens", "n_calls"):
+                    usage[k] += int(r.usage.get(k, 0) or 0)
+        jpath = clip_dir / "judge.json"
+        existing = json.loads(jpath.read_text()) if jpath.exists() else None
+        payload = _clip_judge_payload(sample, run, judge, results, skipped_axes, existing)
+        jpath.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+        clips.append(payload)
+
+    axis_names = sorted({a for c in clips for a in c["axes"]})
+    per_dynamic: dict[str, dict] = {}
+    for dyn in sorted({c["dynamic_type"] for c in clips}):
+        cs = [c for c in clips if c["dynamic_type"] == dyn]
+        per_dynamic[dyn] = {a: _stats([c["axes"][a]["rating"] for c in cs if a in c["axes"]]) for a in axis_names
+                            if any(a in c["axes"] for c in cs)}
+        per_dynamic[dyn]["overall"] = _stats([c["overall"] for c in cs if c["overall"] is not None])
+    summary = {
+        "run_dir": str(run_dir),
+        "judge": judge,
+        "manifest": manifest,
+        "n_clips": timing_summary.get("n_clips", 0),
+        "n_judged": len(clips),
+        "skipped": skipped,
+        "per_axis": {a: _stats([c["axes"][a]["rating"] for c in clips if a in c["axes"]]) for a in axis_names},
+        "overall": _stats([c["overall"] for c in clips if c["overall"] is not None]),
+        "per_dynamic": per_dynamic,
+        "usage": {**usage, "est_cost_usd": judge_mod.estimate_cost_usd(usage, judge)},
+        "timing": timing_summary.get("aggregate", {}),
+        "clips": [{"clip_id": c["clip_id"], "dynamic_type": c["dynamic_type"], "overall": c["overall"],
+                   "axes": {a: v["rating"] for a, v in c["axes"].items()}} for c in clips],
+    }
+    (run_dir / "judge_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2))
+    log.info("judged %d/%d clips with %s; overall %s", len(clips), summary["n_clips"], judge, summary["overall"])
+    return summary

@@ -1,0 +1,13 @@
+UNIVERSAL AXIS: Conversational Fluency. Score smoothness of turn-taking, calibrated to the agent's role in the metadata block (SILENT / SPEAKER / YIELDING / EXCHANGING).
+Category-correctness (whether the agent did the right thing for the cue) lives on the per-category axes, not fluency.
+Natural human disfluencies — occasional "um", brief restarts, slight overlaps, pacing drift — are NOT failures.
+Before scoring, check the agent transcript for failure modes that override window-only timing:
+- System-prompt leak: transcript contains role/style instructions, persona descriptors ("Friendly, warm, and conversational"), topic-priming phrases ("Greet the user and start..."), or other text that reads as system-prompt rehearsal rather than a conversational utterance. -> Score 0.
+- Wrong-turn talking: agent speaks during the user's substantive PRE-window utterance (e.g. opens with "Hello, what's on your mind?" while the user is in the middle of telling a story). -> Score 0–1.
+Rate on 0-5:
+- 0: No response when one was expected, or talking over an entire substantive user turn.
+- 1: Frequent breakdowns that derail the interaction.
+- 2: Several misrecognitions, irrelevant fillers, or mistimed turns.
+- 3: One or two awkward moments but the conversation holds together.
+- 4: Natural human flow — normal disfluencies, brief overlaps, light fillers. Real human conversation lives here.
+- 5: Smooth, attentive flow; well-timed on-topic responses; no derails.

@@ -1,0 +1,13 @@
+CATEGORY: (P) Nonverbal Interruption. At dynamic_start_s the user nonverbally signals an interruption (raised hand, head shake, "stop" gesture, furrowed brow).
+Correct behavior: stop and yield within ~1–1.5s. A 0.5–1s reaction lag is natural and NOT a penalty.
+Pre-rubric check (yielding requires evidence of ongoing speech). For a yield to count, the agent must have been speaking near the dynamic window — look at the PRE / IN / POST agent-speech segments:
+- If the agent has NO speech segments overlapping or within ~2s before the dynamic window, the agent didn't have a turn to yield. This is trivially-silent, not yielding. Cap the score at 2 regardless of in-window silence.
+- If the agent's only speech is well after the window closes (> 5s post), the agent simply hadn't started speaking yet. Cap the score at 2.
+- Genuine yielding requires: the agent WAS audible right before or at the window onset, AND ceased within ~1–1.5s of the cue.
+Rate on 0-5 (only applies when the pre-rubric check passes):
+- 0: Was speaking through the cue and kept talking past it.
+- 1: Was speaking; continues with only a slight slowdown.
+- 2: Was speaking; slows but does not yield. ALSO the cap for trivially-silent cases (agent never had a turn to yield).
+- 3: Was speaking; stops after a long lag (> 2s) or only when the user begins audibly speaking.
+- 4: Was speaking; stops within ~1–1.5s of the cue and yields. Short reaction lag is natural and NOT penalized.
+- 5: Was speaking; stops promptly AND signals readiness (attentive silence, "go ahead").

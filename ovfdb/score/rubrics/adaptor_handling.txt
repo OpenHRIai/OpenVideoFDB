@@ -1,0 +1,10 @@
+CATEGORY: (P) Adaptor Handling. At dynamic_start_s the user produces an adaptor — a self-directed, non-communicative gesture (self-touch, hair adjust, fidget).
+These carry no conversational meaning.
+The agent should NOT react.
+Rate on 0-5:
+- 0: Heavily references the gesture as if communicative ("I see you touching your face — why?").
+- 1: Asks about or names the gesture.
+- 2: Mentions the gesture in passing.
+- 3: Neutral reply but noticeably influenced (hedging, pacing drift).
+- 4: Reply content is unaffected; no trace of the gesture.
+- 5: Content, timing, AND tone are identical to what would have been delivered without the gesture.

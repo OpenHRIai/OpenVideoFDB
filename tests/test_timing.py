@@ -317,6 +317,3 @@ def test_score_timing_pipeline(tmp_path, monkeypatch):
     assert t2["timing_class"] is None and t2["timing"] is None and t2["yield_block"] is None
     assert "-- PRE-DYNAMIC (0.00 -> 5.00s) --" in t2["partition_block"]
     assert json.loads((run_dir / "timing_summary.json").read_text())["n_clips"] == 2
-
-    with pytest.raises(NotImplementedError, match="WS5"):
-        pipeline.score(run_dir)

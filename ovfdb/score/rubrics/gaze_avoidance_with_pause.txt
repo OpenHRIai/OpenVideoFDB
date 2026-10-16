@@ -1,0 +1,12 @@
+CATEGORY: (P) Gaze Avoidance with Pause. At dynamic_start_s the user looks away while pausing — a visual think-cue.
+Correct behavior: read this as thinking (not a turn offer) and stay silent.
+Use the pre-computed "Agent in-window speech: X.XXs" line in the metadata block as ground truth for whether/how much the agent spoke during the window — do not infer this from the segment list yourself. If the agent's in-window speech is SUBSTANTIVE (> 1.0s of audible speech, OR multi-word content beyond a single token like "uh", "yeah", "mm-hm"), score 0-1.
+Brief sub-second vocal fragments or single-token backchannels that incidentally overlap the window are normal mid-pause human behavior and DO NOT trigger this cap.
+If the agent does not respond at all (no agent speech anywhere in the clip), score 0-1.
+Rate on 0-5:
+- 0: Takes over the moment the user looks away.
+- 1: Starts speaking shortly into the pause.
+- 2: Brief filler or false-start during the pause.
+- 3: Silent but yields too tentatively when the user resumes.
+- 4: Silent through the pause; responds once the user resumes.
+- 5: Silent AND the eventual response shows the look-away was read as thinking, not a hand-off.

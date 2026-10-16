@@ -16,7 +16,7 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
 | WS2 mining | in progress (day-1 dialogue dynamics) | agent (session 1) | 2026-10-15 | dialogue finders + VLM verify + prompts; nonverbal dynamics are a day-2 follow-up |
 | WS3 harness (Gemini Live) | done | agent (session 1) | 2026-10-15 | streamer/recorder/human_gt/random/gemini_live; live smoke OK on `gemini-3.1-flash-live-preview` (AV + a2a), drift < 40 ms, no errors. `scripts/smoke_gemini_live.py` |
 | WS4 scoring: ASR + timing | done | agent (session 1) | 2026-10-15 | segments/timing/asr/pipeline; 31 tests; faster-whisper small.en int8 ≈ 8× RT. `timing.json` carries all judge blocks except caption/user words |
-| WS5 judge + calibration | in progress | agent (session 1) | 2026-10-15 | judge + report being built; GT/random calibration runs after WS2 manifest + WS3 harness land |
+| WS5 judge + calibration | judge done; calibration pending | agent (session 1) | 2026-10-15 | rubrics verbatim, judge (gpt-4o/claude/gemini backends), report w/ bootstrap CIs; gpt-4o good=5 / bad=1 on synthetic Pause Handling. ≈$0.01/clip. Calibration needs WS2 manifest |
 | WS6 providers: OpenAI RT, Tavus/Anam, gen judge | todo | — | — | needs WS3, WS5 |
 | WS7 NVIDIA adapter | blocked (external) | — | 2026-10-15 | access requested 2026-10-15, awaiting approval; **not on the critical path** — all other WS run on Seamless |
 | WS8 report + publish | todo | — | — | last |

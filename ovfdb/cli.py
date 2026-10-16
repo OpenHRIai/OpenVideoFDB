@@ -79,10 +79,17 @@ def nvidia_load(split: str = "validation"):
 
 @app.command()
 def mine(dynamics: str = "all", limit: int = 0, label: str = "naturalistic", split: str = "test",
-         manifest: str = "manifest/ovfdb_v0.jsonl"):
-    """WS2: find, verify and trim candidate clips → manifest."""
+         manifest: str = "manifest/ovfdb_v0.jsonl", verify: bool = True, workers: int = 2, scan: int = 60,
+         per_pair: int = 3, max_pairs: int = 0, max_minutes: float = 0.0):
+    """WS2: find, verify and trim candidate clips → manifest.
+
+    --dynamics: comma list (pause_handling,verbal_backchanneling,verbal_interruption,turn_taking,laughter) or all.
+    --limit: max clips per (dynamic, bucket). --no-verify skips the Gemini check. --scan: pairs whose
+    VAD/transcripts are scanned before choosing which media to download.
+    """
     from ovfdb.mine import pipeline  # WS2
-    pipeline.run(dynamics=dynamics, limit=limit, label=label, split=split, manifest=manifest)
+    pipeline.run(dynamics=dynamics, limit=limit, label=label, split=split, manifest=manifest, verify=verify,
+                 workers=workers, scan=scan, per_pair=per_pair, max_pairs=max_pairs, max_minutes=max_minutes)
 
 
 @app.command()
@@ -102,10 +109,10 @@ def score_timing(run_dir: str):
 
 
 @app.command()
-def score(run_dir: str, judge: str = "gpt-4o", axes: str = "all"):
+def score(run_dir: str, judge: str = "gpt-4o", axes: str = "all", manifest: str = "", force: bool = False):
     """WS5: ASR + timing + LLM judge; writes per-clip JSON and a summary."""
     from ovfdb.score import pipeline  # WS5
-    pipeline.score(run_dir, judge=judge, axes=axes)
+    pipeline.score(run_dir, judge=judge, axes=axes, manifest=manifest or None, force=force)
 
 
 @app.command()

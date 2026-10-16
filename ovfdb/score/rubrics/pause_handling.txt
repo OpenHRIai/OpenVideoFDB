@@ -1,0 +1,9 @@
+CATEGORY: (P) Pause Handling. At dynamic_start_s the user pauses mid-thought.
+Correct behavior: stay silent through the pause; let the user continue.
+Rate on 0-5:
+- 0: Cuts in immediately at the pause and takes the turn.
+- 1: Starts speaking well into the pause.
+- 2: Audible filler or false-start during the pause.
+- 3: Silent through most of the pause, then overlaps the user's resumption.
+- 4: Silent through the pause; clean resumption after the user continues.
+- 5: Silent AND the eventual response substantively addresses the user's completed thought.
