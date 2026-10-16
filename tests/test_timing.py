@@ -240,6 +240,17 @@ def test_smooth_handoff_already_speaking_at_ds():
     assert r.details["agent_speaks_first"] is True
 
 
+def test_smooth_handoff_onset_tolerance():
+    # onset up to HANDOFF_ONSET_TOLERANCE_S (0.5 s) after de still passes; latency is unchanged (onset - ds)
+    assert timing.HANDOFF_ONSET_TOLERANCE_S == 0.5
+    r = ev([seg(8.3, 10.0)], TimingClass.SMOOTH_HANDOFF)
+    assert r.passed and r.latency_ms == pytest.approx(3300.0) and r.details["onset_after_de_s"] == pytest.approx(0.3)
+    r = ev([seg(8.5, 10.0)], TimingClass.SMOOTH_HANDOFF)              # exactly at the tolerance
+    assert r.passed and r.details["onset_tolerance_s"] == 0.5
+    r = ev([seg(8.51, 10.0)], TimingClass.SMOOTH_HANDOFF)
+    assert not r.passed and r.latency_ms == pytest.approx(3510.0) and r.takeover == 0
+
+
 # --- backchannel-produced -------------------------------------------------------
 
 def test_backchannel_produced_pass():
@@ -260,6 +271,43 @@ def test_backchannel_produced_mixed_fails():
     r = ev([seg(5.5, 6.0, "mhm"), seg(6.5, 7.9, "yeah I agree")], TimingClass.BACKCHANNEL_PRODUCED)
     assert not r.passed and r.takeover == 1 and r.latency_ms == pytest.approx(500.0)
     assert r.details["n_floor_takes"] == 1
+
+
+def test_backchannel_produced_window_edge_tolerance():
+    # ds=5, de=8: a backchannel starting 0.2 s after de (or ending 0.2 s before ds) is still in-window
+    assert timing.WINDOW_EDGE_TOLERANCE_S == 0.25
+    r = ev([seg(8.2, 8.6, "okay")], TimingClass.BACKCHANNEL_PRODUCED)
+    assert r.passed and r.details["n_backchannels"] == 1 and r.details["window_edge_tolerance_s"] == 0.25
+    assert r.details["in_window_speech_s"] == 0.0 and r.latency_ms == pytest.approx(3200.0)
+    r = ev([seg(4.4, 4.8, "okay")], TimingClass.BACKCHANNEL_PRODUCED)
+    assert r.passed and r.latency_ms == 0.0
+    r = ev([seg(8.3, 8.6, "okay")], TimingClass.BACKCHANNEL_PRODUCED)           # 0.3 s after de: outside
+    assert not r.passed and r.details["n_backchannels"] == 0
+    # a floor take just outside de now counts against the row
+    r = ev([seg(5.5, 6.0, "mhm"), seg(8.2, 9.9, "yeah I agree")], TimingClass.BACKCHANNEL_PRODUCED)
+    assert not r.passed and r.takeover == 1
+    # wordless VAD region (non-lexical "mhm") passes
+    r = ev([seg(5.5, 6.0, "", 0)], TimingClass.BACKCHANNEL_PRODUCED)
+    assert r.passed and r.takeover == 0
+
+
+def test_backchannel_duration_slack():
+    r = ev([seg(5.5, 6.54, "yeah")], TimingClass.BACKCHANNEL_PRODUCED)          # 1.04 s
+    assert r.passed and r.details["n_backchannels"] == 1
+    r = ev([seg(5.5, 6.65, "yeah")], TimingClass.BACKCHANNEL_PRODUCED)          # 1.15 s: over 1.0 + 0.1
+    assert not r.passed and r.details["n_floor_takes"] == 1
+
+
+def test_stay_silent_window_edge_tolerance():
+    # ds=5, de=8: 1.8 s of in-window backchannels (> 1 s) plus a floor take that begins 0.2 s after de
+    bcs = [seg(5.2, 6.1, "mhm"), seg(7.0, 7.9, "yeah")]
+    r = ev(bcs + [seg(8.2, 10.0)], TimingClass.STAY_SILENT)
+    assert not r.passed and r.takeover == 1 and r.details["all_backchannel"] is False
+    r = ev(bcs + [seg(8.3, 10.0)], TimingClass.STAY_SILENT)                      # 0.3 s after de: outside
+    assert r.passed and r.takeover == 0 and r.details["all_backchannel"] is True
+    # other classes keep the strict window: continue-speaking takeover ignores the margin
+    r = ev([seg(8.2, 10.0)], TimingClass.CONTINUE_SPEAKING)
+    assert r.takeover == 0 and "window_edge_tolerance_s" not in r.details
 
 
 # --- aggregate ------------------------------------------------------------------

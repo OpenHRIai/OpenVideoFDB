@@ -19,6 +19,15 @@ from ovfdb.score.segments import (
 
 BACKCHANNEL_MAX_DUR_S = 1.0
 BACKCHANNEL_MAX_WORDS = 2          # "< 2 words" in the paper => n_words < 2
+#: Measurement slack on the 1.0 s backchannel limit: ASR/VAD segment bounds carry ~0.1 s of
+#: jitter (human GT: a 1.04 s "yeah" is still a backchannel). Compared as dur < 1.0 + 0.1.
+BACKCHANNEL_DUR_SLACK_S = 0.1
+#: smooth-handoff passes when the onset is <= de + tolerance. Mined handoff windows are tight
+#: (0.3-1.3 s) and human onsets landed 80-370 ms after de; latency is still onset - ds.
+HANDOFF_ONSET_TOLERANCE_S = 0.5
+#: backchannel-produced / stay-silent: a segment counts as in-window when it overlaps
+#: [ds - tol, de + tol] (human GT "Okay" 80 ms after de). Other classes use the strict window.
+WINDOW_EDGE_TOLERANCE_S = 0.25
 STAY_SILENT_MAX_INWINDOW_S = 1.0
 YIELD_MAX_LATENCY_S = 1.5
 CONTINUE_PRE_WINDOW_S = 3.0
@@ -33,7 +42,9 @@ YIELD_LATE_LAG_MAX_S = 3.0
 
 
 def is_backchannel(seg: Segment) -> bool:
-    return seg.dur < BACKCHANNEL_MAX_DUR_S and seg.n_words < BACKCHANNEL_MAX_WORDS
+    """< 1 s (+ 0.1 s slack) and < 2 normalised words; a wordless VAD region ("mhm") qualifies."""
+    return (seg.dur < BACKCHANNEL_MAX_DUR_S + BACKCHANNEL_DUR_SLACK_S
+            and seg.n_words < BACKCHANNEL_MAX_WORDS)
 
 
 def timing_class(dynamic: DynamicType, bucket: Bucket) -> TimingClass | None:
@@ -190,9 +201,14 @@ def evaluate(segs: list[Segment], ds: float, de: float, cls: TimingClass,
     continue-speaking:  if activity in [ds-3, ds) >= 30 % then require in-window activity >= 50 %; else vacuous pass.
     yield-required:     latency = end of seg overlapping ds (or last seg ending before ds) - ds; pass if <= 1.5 s.
                         No speech near ds -> fail, details["trivially_silent"] = True.
-    smooth-handoff:     latency = first onset after ds - ds (0 if speaking at ds); pass if onset <= de.
+    smooth-handoff:     latency = first onset after ds - ds (0 if speaking at ds);
+                        pass if onset <= de + HANDOFF_ONSET_TOLERANCE_S.
     backchannel-produced: pass if >= 1 in-window backchannel AND no in-window non-backchannel seg.
     takeover = 0 if in-window output is silence/backchannels only, else 1.
+
+    "In-window" for the backchannel classes (stay-silent, backchannel-produced) means overlapping
+    [ds - WINDOW_EDGE_TOLERANCE_S, de + WINDOW_EDGE_TOLERANCE_S]; `in_window_speech_s` and every
+    other class use the strict window [ds, de].
     """
     cls = TimingClass(cls)
     if clip_end is None:
@@ -201,10 +217,16 @@ def evaluate(segs: list[Segment], ds: float, de: float, cls: TimingClass,
     ov = overlaps(segs, ds, de)
     in_segs = [s for s, _ in ov]
     in_speech_s = sum(o for _, o in ov)
-    non_bc = [s for s in in_segs if not is_backchannel(s)]
-    bc = [s for s in in_segs if is_backchannel(s)]
-    takeover = 0 if not non_bc else 1
     details: dict = {"in_window_speech_s": round(in_speech_s, 3), "agent_speaks_first": agent_speaks_first}
+    if cls in (TimingClass.STAY_SILENT, TimingClass.BACKCHANNEL_PRODUCED):
+        tol = WINDOW_EDGE_TOLERANCE_S
+        member = [s for s, _ in overlaps(segs, ds - tol, de + tol)]
+        details["window_edge_tolerance_s"] = tol
+    else:
+        member = in_segs
+    non_bc = [s for s in member if not is_backchannel(s)]
+    bc = [s for s in member if is_backchannel(s)]
+    takeover = 0 if not non_bc else 1
     latency: float | None = None
 
     if cls is TimingClass.STAY_SILENT:
@@ -256,8 +278,10 @@ def evaluate(segs: list[Segment], ds: float, de: float, cls: TimingClass,
                 details["no_onset"] = True
             else:
                 latency = onset - ds
-                passed = onset <= de
+                passed = onset <= de + HANDOFF_ONSET_TOLERANCE_S
                 details["no_onset"] = False
+                details["onset_after_de_s"] = round(onset - de, 3)
+                details["onset_tolerance_s"] = HANDOFF_ONSET_TOLERANCE_S
 
     elif cls is TimingClass.BACKCHANNEL_PRODUCED:
         passed = bool(bc) and not non_bc

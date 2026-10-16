@@ -28,9 +28,9 @@ from pathlib import Path
 from statistics import mean, stdev
 
 from ovfdb.schema import AgentRole, AgentRun, Axis, Bucket, Sample, TimingClass, read_manifest
-from ovfdb.score import asr
+from ovfdb.score import asr, vad
 from ovfdb.score import judge as judge_mod
-from ovfdb.score.segments import format_partition, partition, words_to_segments
+from ovfdb.score.segments import format_partition, merge_vad_and_words, partition, words_to_segments
 from ovfdb.score.timing import TimingResult, aggregate, evaluate, overlap_summary, yield_analysis
 
 log = logging.getLogger(__name__)
@@ -68,12 +68,30 @@ def _resolve(p: str | None, base: Path, default: str) -> Path:
     return q
 
 
+def agent_segments(wav: Path, words: list, clip_id: str = "", *, vad_backend: str = "auto") -> tuple[list, dict]:
+    """Agent speech segments = VAD regions on `wav` with ASR `words` attached (docs/protocol.md §4).
+
+    Falls back to `words_to_segments(words)` when the VAD cannot run (unreadable / empty wav,
+    missing backend). Returns (segments, info) where info records which path was used.
+    """
+    try:
+        det = vad.detect(wav, backend=vad_backend)
+    except Exception as e:  # noqa: BLE001 - any VAD failure degrades to the ASR-only path
+        log.warning("%s: VAD failed (%s: %s); segments from ASR words only", clip_id or wav, type(e).__name__, e)
+        return words_to_segments(words), {"source": "asr", "vad_backend": None, "n_regions": None,
+                                          "error": f"{type(e).__name__}: {e}"}
+    info = {"source": "vad+asr", "vad_backend": det.backend, "n_regions": len(det.regions)}
+    if det.error:
+        info["error"] = det.error
+    return merge_vad_and_words(det.regions, words), info
+
+
 def score_clip(clip_dir: Path, sample: Sample, run: AgentRun, *, asr_model: str = asr.DEFAULT_MODEL,
                asr_backend: str = asr.DEFAULT_BACKEND) -> dict:
-    """ASR + derived signals + timing for one clip. Returns the timing.json payload."""
+    """ASR + VAD + derived signals + timing for one clip. Returns the timing.json payload."""
     wav = _resolve(run.agent_audio_path, clip_dir, "agent.wav")
     words = asr.load_or_transcribe(wav, model=asr_model, backend=asr_backend)
-    segs = words_to_segments(words)
+    segs, seg_info = agent_segments(wav, words, sample.clip_id)
     ds, de, end = sample.dynamic_start_s, sample.dynamic_end_s, sample.duration_s
     ov = overlap_summary(segs, ds, de, end)
     parts = partition(segs, ds, de, end)
@@ -88,8 +106,9 @@ def score_clip(clip_dir: Path, sample: Sample, run: AgentRun, *, asr_model: str 
         "duration_s": end,
         "agent_role": sample.agent_role.value,
         "asr": {"model": asr_model, "backend": asr_backend, "n_words": len(words)},
+        "segments_source": seg_info,
         "segments": [asdict(s) for s in segs],
-        "transcript": " ".join(s.text for s in segs) or "[no speech]",
+        "transcript": " ".join(s.text for s in segs if s.text) or "[no speech]",
         "overlap_line": ov.line(),
         "overlap": {
             "total_in_window_s": round(ov.total_in_window_s, 3),
@@ -261,7 +280,7 @@ def score(run_dir: str | Path, judge: str = judge_mod.DEFAULT_JUDGE, axes: str =
     """
     run_dir = Path(run_dir)
     manifest = _resolve_manifest(run_dir, manifest)
-    timing_summary = score_timing(run_dir, manifest=manifest)
+    timing_summary = score_timing(run_dir, manifest=manifest, force=force)   # ASR cache is kept either way
     manifest = timing_summary["manifest"]
     wanted = _parse_axes(axes)
     rows_out: list[dict] = []

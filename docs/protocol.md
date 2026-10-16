@@ -91,6 +91,26 @@ followed by ≥ 1.5 s silence; verdict bands by lag vs de: ≤ 1.5 s YIELDED, 1.
 "with brief late lag", else DID NOT YIELD. Yield-analysis windows: pre [ds−5, ds],
 post [de, de+14], clipped at clip edges. Partition block prints activity on all
 three headers; a segment straddling ds/de is clipped into both regions.
+**Agent segments are VAD-derived, not ASR-derived** (`ovfdb/score/vad.py`,
+`segments.merge_vad_and_words`): speech regions come from Silero VAD (the ONNX model
+bundled with faster-whisper; RMS-energy VAD with a noise-floor-relative threshold,
+20 ms frames, min speech 150 ms, min silence 300 ms as fallback), regions < 0.5 s
+apart merge, ASR words attach to the region containing their midpoint (else the
+nearest region within 0.5 s), and a region with no words is a non-lexical
+vocalisation (`text=""`, `n_words=0`, counts as a backchannel when < 1 s).
+`timing.json` records the path used in `segments_source` (`vad+asr` or the
+`asr`-only fallback). **Word counting** for the backchannel limit normalises
+tokens (lower-case, punctuation stripped, hyphens split), merges consecutive
+vocalisation tokens ("mm -hmm", "uh huh" → 1) and collapses immediate repetitions
+("yeah yeah" → 1). **Tolerances**: backchannel duration is compared as
+`< 1.0 + 0.1 s` slack (segment-bound jitter); smooth-handoff passes when the first
+onset is `≤ de + 0.5 s` (latency still `onset − ds`); for backchannel-produced and
+stay-silent, "in-window" membership means overlapping `[ds − 0.25, de + 0.25]`
+(`in_window_speech_s` and the other classes keep the strict window). Calibration
+evidence (human GT, STATUS.md): whisper dropped non-lexical "mhm" entirely, wrote
+"Mm -hmm." / "Yeah. Yeah." as 2 words, timed a "yeah" at 1.04 s, placed an "Okay"
+80 ms after de, and lagged acoustic onsets by 80–370 ms in every Turn-taking
+failure of our tight (0.3–1.3 s) mined handoff windows.
 
 ## 5. Perception judge (text-only; F.5)
 Model: gpt-4o in the paper (also validated llama-3.1-70b, claude-sonnet-4-6;
@@ -168,4 +188,12 @@ Ground). Reproduce this before trusting any model score.
   lens — detect gaze *aversion relative to baseline*, not "at camera".
 - AV caption from Gemini Flash instead of Qwen3.5-397B + Nemotron-Omni.
 - ASR faster-whisper instead of Parakeet.
+- Agent speech segments come from VAD (Silero via faster-whisper's bundled ONNX
+  model, energy fallback) with ASR words attached, not from ASR words alone, and
+  the timing rules carry small tolerances (backchannel `< 1.0 + 0.1 s`,
+  handoff onset `≤ de + 0.5 s`, `±0.25 s` window membership for the backchannel
+  classes; see §4). Justification: with ASR-only segments the human partner scored
+  40 % on Verbal Backchanneling (whisper drops "mhm", counts "Mm -hmm" as 2 words,
+  pads a "yeah" to 1.04 s) and 50 % on Turn-taking (word onsets 80–370 ms after
+  the end of our 0.3–1.3 s handoff windows), far below the paper's ≈78 % GT.
 - Mining is rule-based + VLM-verified with spot checks, not a 3-pass human pipeline.
