@@ -81,6 +81,17 @@ smooth-handoff. **TOR-Alignment** = fraction of clips whose observed takeover
 matches TO\* (i.e. the pass rule). Report per dynamic and aggregate, plus median
 latency (ms). Human GT: 90 % / 1400 ms (perception), 78 % / 900 ms (generation).
 
+**Implementation decisions (WS4, `ovfdb/score/timing.py`)** — where the paper is
+underspecified: `tor_alignment` = pass-rule rate; the literal TO_i is kept as
+`takeover` and reported as raw `takeover_rate`. "Immediately preceding" segment for
+yield-required = ends within 1.0 s before ds; nothing near ds ⇒ `trivially_silent`,
+fail, latency None. Negative yield latency clamps to 0 (signed value in
+`details.stop_offset_s`). Yield moment = end of the first segment (from ds on)
+followed by ≥ 1.5 s silence; verdict bands by lag vs de: ≤ 1.5 s YIELDED, 1.5–3 s
+"with brief late lag", else DID NOT YIELD. Yield-analysis windows: pre [ds−5, ds],
+post [de, de+14], clipped at clip edges. Partition block prints activity on all
+three headers; a segment straddling ds/de is clipped into both regions.
+
 ## 5. Perception judge (text-only; F.5)
 Model: gpt-4o in the paper (also validated llama-3.1-70b, claude-sonnet-4-6;
 pairwise agreement 77–89 % within 1 point). Output schema (universal):
