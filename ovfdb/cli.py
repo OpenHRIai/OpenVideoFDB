@@ -26,10 +26,48 @@ def seamless_fetch(file_id: str, kinds: str = "audio,vad,transcript,3P-V"):
         typer.echo(f"{kind}\t{path}")
 
 
+@seamless_app.command("fetch-movement")
+def seamless_fetch_movement(file_id: str, features: str = "", group: str = "movement"):
+    """Download 30 Hz .npy features (only files with has_imitator_movement=1 have them)."""
+    from ovfdb.data.seamless import DEFAULT_MOVEMENT_FEATURES, fetch_movement
+    feats = tuple(features.split(",")) if features else DEFAULT_MOVEMENT_FEATURES
+    got = fetch_movement(file_id, feats, group)
+    if not got:
+        typer.echo(f"no {group} features on the mirror for {file_id}", err=True)
+    for feature, path in got.items():
+        typer.echo(f"{feature}\t{path}")
+
+
 @seamless_app.command("trim")
-def seamless_trim(user_id: str, partner_id: str, t0: float, t1: float, out_dir: str = "data/clips/_scratch"):
-    from ovfdb.data.seamless import trim  # WS1
-    typer.echo(trim(user_id, partner_id, t0, t1, out_dir))
+def seamless_trim(user_id: str, partner_id: str, t0: float, t1: float, out_dir: str = "data/clips/_scratch",
+                  no_video: bool = False):
+    """Cut [t0, t1] of both participants to user/partner .wav (16 kHz) and .mp4 (720p30)."""
+    from ovfdb.data.seamless import media_duration, trim  # WS1
+    for key, path in trim(user_id, partner_id, t0, t1, out_dir, video=not no_video).items():
+        typer.echo(f"{key}\t{path}\t{media_duration(path):.3f}s")
+
+
+@seamless_app.command("check")
+def seamless_check(user_id: str, partner_id: str = ""):
+    """Quality gate: fraction of transcript words outside any VAD region (fail > 0.2)."""
+    from ovfdb.data.seamless import (
+        fetch,
+        pair_is_consistent,
+        read_transcript,
+        read_vad,
+        transcript_words,
+        words_outside_vad_frac,
+    )
+    for fid in (user_id, partner_id) if partner_id else (user_id,):
+        got = fetch(fid, ("vad", "transcript"))
+        if "vad" in got and "transcript" in got:
+            frac = words_outside_vad_frac(transcript_words(read_transcript(got["transcript"])), read_vad(got["vad"]))
+            typer.echo(f"{fid}\twords_outside_vad={frac:.3f}")
+        else:
+            typer.echo(f"{fid}\tmissing {[k for k in ('vad', 'transcript') if k not in got]}")
+    ok = pair_is_consistent(user_id, partner_id or None)
+    typer.echo("OK" if ok else "REJECT")
+    raise typer.Exit(code=0 if ok else 1)
 
 
 @nvidia_app.command("load")

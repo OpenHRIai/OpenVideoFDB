@@ -30,8 +30,8 @@
   `improvised` (actors; avoid). Splits dev/test/train.
 - Every file is individually fetchable (no auth) from the public mirror:
   ```
-  https://dl.fbaipublicfiles.com/seamless_interaction/{label}/{split}/video/{file_id}.mp4          # H.264 1080p 30 fps, ~180 MB for ~2.5 min
-  https://dl.fbaipublicfiles.com/seamless_interaction/{label}/{split}/audio/{file_id}.wav          # 48 kHz 16-bit, denoised, ~33 MB
+  https://dl.fbaipublicfiles.com/seamless_interaction/{label}/{split}/video/{file_id}.mp4          # H.264 **2160x3840 portrait** 29.97 fps (card says 1080p; mirror is 4K), ~180 MB for ~2.5 min
+  https://dl.fbaipublicfiles.com/seamless_interaction/{label}/{split}/audio/{file_id}.wav          # 48 kHz pcm_f32le mono, denoised, ~33 MB
   https://dl.fbaipublicfiles.com/seamless_interaction/{label}/{split}/metadata/vad/{file_id}.jsonl
   https://dl.fbaipublicfiles.com/seamless_interaction/{label}/{split}/metadata/transcript/{file_id}.jsonl
   https://dl.fbaipublicfiles.com/seamless_interaction/{label}/{split}/annotations/{3P-V|3P-IS|3P-R|1P-IS|1P-R}/{file_id}.json
@@ -62,6 +62,19 @@
   `movement:alignment_head_rotation`, `movement:alignment_translation`,
   `boxes_and_keypoints:*`, `smplh:*`. 30 Hz. Exact feature names for the
   per-file mirror come from `ALL_FEATURES` in `fs.py` — fetch and pin it in WS1.
+- **Missing keys return HTTP 403 (S3 AccessDenied), not 404.** `fetch()` treats both as absent.
+- **Movement features (`movement`, `movement_v4`) exist only for files with
+  `has_imitator_movement=1`.** None of the 39 naturalistic/test 3P-annotated files
+  have them; 122/504 in naturalistic/train do. `smplh` and `boxes_and_keypoints`
+  exist regardless. Gate with `seamless.has_movement(file_id)`. Verified shapes
+  (30 Hz rows, float64): emotion_valence (T,1), emotion_arousal (T,1),
+  gaze_encodings (T,2), head_encodings (T,3), FAUValue (T,24), emotion_scores (T,8),
+  expression (T,128), is_valid (T,1). Exact names pinned in `ALL_FEATURES` in
+  `ovfdb/data/seamless.py`.
+- Transcript words whose forced alignment failed have `start: null` (numerals);
+  `read_transcript` drops them.
+- Trim cost ≈ 0.25 s wall per clip-second (4K decode); `-hwaccel videotoolbox` if
+  mining hundreds of clips.
 - Known noise (from the card): ~10 % of interactions have misaligned
   start/end; occasional participant-id errors; variable site quality.
 - Recording setup: in-person, face-to-face, one camera per participant, both

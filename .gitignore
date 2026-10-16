@@ -1,6 +1,6 @@
 # data & runs never go in git
-data/
-runs/
+/data/
+/runs/
 *.mp4
 *.wav
 *.webm

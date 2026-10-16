@@ -11,10 +11,10 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
 | WS | Status | Session / owner | Last update | Notes / blockers |
 |----|--------|-----------------|-------------|------------------|
 | WS0 scaffold | done | session 1 | 2026-10-15 | schema, stubs, docs, plans |
-| WS1 seamless data | todo | — | — | `ovfdb/data/seamless.py` has URL builder + filelist; fetch/trim/pairing to do |
+| WS1 seamless data | done | agent (session 1) | 2026-10-15 | fetch/movement/trim/to_sample/quality gate; 14 tests incl. network. Movement features absent for all annotated nat/test files (see data-sources.md) |
 | WS2 mining | todo | — | — | needs WS1 |
-| WS3 harness (Gemini Live) | todo | — | — | |
-| WS4 scoring: ASR + timing | todo | — | — | |
+| WS3 harness (Gemini Live) | in progress | agent (session 1) | 2026-10-15 | no GOOGLE_API_KEY yet: live smoke test deferred; |
+| WS4 scoring: ASR + timing | in progress | agent (session 1) | 2026-10-15 | |
 | WS5 judge + calibration | todo | — | — | needs WS4 |
 | WS6 providers: OpenAI RT, Tavus/Anam, gen judge | todo | — | — | needs WS3, WS5 |
 | WS7 NVIDIA adapter | blocked (external) | — | 2026-10-15 | access requested 2026-10-15, awaiting approval; **not on the critical path** — all other WS run on Seamless |
