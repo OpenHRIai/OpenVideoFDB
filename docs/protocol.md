@@ -213,7 +213,17 @@ Ground). Reproduce this before trusting any model score.
   pads a "yeah" to 1.04 s) and 50 % on Turn-taking (word onsets 80–370 ms after
   the end of our 0.3–1.3 s handoff windows), far below the paper's ≈78 % GT.
 - Mining is rule-based + VLM-verified with spot checks, not a 3-pass human pipeline.
-- Day-1 dynamic windows are mined with rules that condition on the partner's behaviour (partner
-  silent through the pause, partner stops ≤ 1.5 s, handoff window ends at the partner's onset, window built
-  around the partner's backchannel), so the human reference passes the timing rules by construction
-  (TOR-Align 100 % vs the paper's 90 % / 78 %). Paper windows annotate the user's cue only. See results notes.
+- **Manifest v0 (`manifest/ovfdb_v0.jsonl`)**: day-1 dynamic windows were mined with rules that condition
+  on the partner's behaviour (partner silent through the pause, partner stops ≤ 1.5 s, handoff window ends at
+  the partner's onset, window built around the partner's backchannel), so the human reference passes the
+  timing rules by construction (TOR-Align 100 % vs the paper's 90 % / 78 %). Paper windows annotate the
+  user's cue only.
+- **Manifest v1 (`manifest/ovfdb_v1.jsonl`, `ovfdb mine --tag v1`)**: day-1 rules select on the user's cue
+  and the partner's state *before* it only, with fixed windows after the cue — Pause = the user's 1–4 s
+  mid-turn silence (partner not talking as the user trailed off); Turn-taking = user's turn end → +1.5 s
+  (user quiet for 4 s, no partner overlap at the end); Verbal Interruption = user's onset while the partner
+  is articulating → +1.5 s (user holds ≥ 2 s); Verbal Backchanneling = a 0.15–0.6 s breath inside a ≥ 6 s user
+  turn, −0.25 s → +1.0 s (partner quiet for 2 s before); Laughter-G = laugh → +2 s. VLM verification of
+  these dynamics sees the USER's own clip and the partner's pre-window transcript only. Rules in
+  `ovfdb/mine/dialogue.py`. Residual gap to the paper: pauses where the partner cut in *and* the user never
+  resumed cannot be recovered without a human, so v1 excludes them.

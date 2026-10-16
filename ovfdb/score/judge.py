@@ -305,8 +305,10 @@ def cue_line(sample: Sample) -> str | None:
         return (f"Mined cue: the user laughs at t={ds:.2f}s during their own turn"
                 + (f" ({own})" if own else "") + "; the agent is the listener.")
     if rule == "verbal_backchanneling":
-        return (f"Mined cue: the user holds the floor through the window ({win}); this is where a listener would "
-                f"drop a short backchannel without taking the turn.")
+        before = _ev_text(ev, "text_before")
+        slot = f" at a brief breath/clause boundary after {before}" if before else ""
+        return (f"Mined cue: the user is mid-story and holds the floor through the window ({win}){slot}; this is "
+                f"where a listener would drop a short backchannel without taking the turn.")
     if rule == "verbal_interruption":
         a_text = _ev_text(ev, "a_text")
         s = f"the user starts talking over the agent at t={ds:.2f}s"

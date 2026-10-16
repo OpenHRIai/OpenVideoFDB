@@ -136,8 +136,11 @@ def test_cue_line_dialogue_rules():
                                   "and offers the floor; the handoff window is t=4.00s to t=7.00s.")
     vb = make_sample(dynamic=DynamicType.VERBAL_BACKCHANNELING, bucket=Bucket.GENERATION,
                      source_meta=_meta("verbal_backchanneling", backchannel_text="Yeah.", backchannel_s=0.32))
-    assert judge.cue_line(vb) == ("Mined cue: the user holds the floor through the window (t=4.00s to t=7.00s); this is "
-                                  "where a listener would drop a short backchannel without taking the turn.")
+    assert judge.cue_line(vb) == ("Mined cue: the user is mid-story and holds the floor through the window (t=4.00s to "
+                                  "t=7.00s); this is where a listener would drop a short backchannel without taking the turn.")
+    vb2 = make_sample(dynamic=DynamicType.VERBAL_BACKCHANNELING, bucket=Bucket.GENERATION,
+                      source_meta=_meta("verbal_backchanneling", gap_s=0.3, text_before="up the coast,"))
+    assert 'at a brief breath/clause boundary after "up the coast,"' in judge.cue_line(vb2)
     # long evidence text is cut at a word boundary from the end
     long = make_sample(source_meta=_meta("pause_handling", text_before="word " * 60 + "anxious and stuff."))
     assert '"...word word word' in judge.cue_line(long) and "...ord" not in judge.cue_line(long)
