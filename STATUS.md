@@ -14,8 +14,8 @@ Committed and pushed through the commits below. Everything on disk under `runs/`
    unchanged, 150 tests pass). Judge payload v2 committed (`d1bedc4`, `1d4adaf`; docs/protocol.md §5) and
    calibrated: GT 4.12 / random 2.70 overall, GT Pause flow 4.6, GT Laughter fluency 4.0
    (`results/calibration_v2.md`, notes at the bottom). Model runs judged with payload v2 (gpt-4o,
-   ≈$0.27/run): gemini_live_av 3.45, openai_realtime_av 3.50, gemini_live_a2a 3.68, openai_realtime_a2a
-   (see `results/v0_summary.md`). The a2a runs were judged against the 60 day-1 rows only (they also hold 10
+   ≈$0.47/run on all rows): day-1 rows gemini_live_av 3.45, openai_realtime_av 3.50, gemini_live_a2a 3.68,
+   openai_realtime_a2a 2.80 (`results/v0_summary.md`). The a2a runs were judged against the 60 day-1 rows only (they also hold 10
    nonverbal clips that gt/random/av runs lack; a day-1 manifest subset = `head -60 manifest/ovfdb_v0.jsonl`).
 2. **Finding — caption speaker swap.** Gemini's AV caption lip-reads a mixed audio track and attributes
    speech to the wrong pane for whole pairs (`V00_S0314_*`: 3 clearly swapped, 6 mixed of 37 decidable
@@ -28,8 +28,10 @@ Committed and pushed through the commits below. Everything on disk under `runs/`
    judge cannot hear register. Candidate fix: run `ovfdb/mine/laughter.py` on `agent.wav` and add agent
    laugh spans to the payload. Random scores 2.7 (not 2.1) because wordless spans are no longer read as
    talk-over for anyone; GT–random gap 1.4.
-4. **Next steps in order**: (a) nonverbal rows: `ovfdb run` for gt/random/gemini/openai on the 56 new
-   clips (incremental; ≈110 → 118 rows, 6 nonverbal dynamics), then `ovfdb score` + `ovfdb report`;
+4. **Nonverbal rows done too** (all six runs on 110 clips / 118 rows, judged; `results/v0_summary_all.md`):
+   GT 4.27 / random 2.47; models 3.36–3.69; a2a ≥ av on every nonverbal dynamic (video not exploited);
+   Nonverbal Interruption has only 2 rows; Adaptor grounding is trivially 5.0 for everyone (rubric).
+   **Next steps in order**: (a) mine more Nonverbal Interruption (+ Emotion Matching P) rows;
    (b) caption v2 (item 2) and re-judge; (c) WS6b/6c (Tavus/Anam via Playwright, generation judge —
    the 24 generation nonverbal rows have no judge yet); (d) WS8 README + manifest-only publish;
    (e) optional second judge (needs ANTHROPIC_API_KEY) for agreement numbers via `report.agreement`.
@@ -48,7 +50,7 @@ Committed and pushed through the commits below. Everything on disk under `runs/`
 | WS5 judge + calibration | done (payload v2 calibrated) | session 2 | 2026-10-16 | rubrics verbatim, judge (gpt-4o/claude/gemini backends), report w/ bootstrap CIs. Payload v2: GT 4.12 vs random 2.70; results/calibration_v2.md. ≈$0.013/row-axis |
 | WS6 providers: OpenAI RT, Tavus/Anam, gen judge | 6a done; 6b/6c todo (keys needed in .env) | agent (session 1) | 2026-10-15 | openai_realtime provider live-verified (gpt-realtime, -mini; AV via input_image items, 1 fps). Tavus/Anam + generation judge still todo |
 | WS7 NVIDIA adapter | blocked (external) | — | 2026-10-15 | access requested 2026-10-15, awaiting approval; **not on the critical path** — all other WS run on Seamless |
-| WS8 report + publish | first results table done; README/publish todo | session 2 | 2026-10-16 | results/v0_summary.md (6 runs, day-1 rows) |
+| WS8 report + publish | results tables done; README/publish todo | session 2 | 2026-10-16 | results/v0_summary.md (day-1 rows), results/v0_summary_all.md (all 118 rows) |
 
 ## Decisions log
 - 2026-10-15 — Perception bucket first; generation is a stretch (needs video-out agents).
