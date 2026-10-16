@@ -28,6 +28,9 @@ Committed and pushed through the commits below. Everything on disk under `runs/`
    judge cannot hear register. Candidate fix: run `ovfdb/mine/laughter.py` on `agent.wav` and add agent
    laugh spans to the payload. Random scores 2.7 (not 2.1) because wordless spans are no longer read as
    talk-over for anyone; GT–random gap 1.4.
+3b. **Caveat — GT timing is circular on day-1 dynamics**: mining rules condition on the partner's response
+   (see docs/protocol.md §10), so human-reference TOR-Align = 100 % by construction (paper 90 % / 78 %). To fix:
+   re-mine with user-cue-only windows (fixed post-cue window) — a manifest change, so decide before publishing.
 4. **Nonverbal rows done too** (all six runs on 110 clips / 118 rows, judged; `results/v0_summary_all.md`):
    GT 4.27 / random 2.47; models 3.36–3.69; a2a ≥ av on every nonverbal dynamic (video not exploited);
    Nonverbal Interruption has only 2 rows; Adaptor grounding is trivially 5.0 for everyone (rubric).

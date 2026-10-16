@@ -127,3 +127,11 @@ Judge: gpt-4o. n = manifest rows (clip, bucket) scored. Rows restricted to the f
 - AV vs a2a is not consistently different on these audio-first dynamics (Gemini a2a ≥ av; OpenAI av ≫ a2a
   on Pause, a2a ≫ av on Laughter). The nonverbal dynamics (56 new clips) are where video should matter;
   runs on them are the next step.
+- **Human-reference TOR-Align is 100 % by construction on the day-1 dynamics** (paper: 90 % perception /
+  78 % generation). The paper's windows annotate the *user's* cue and let the partner's reaction fall where it
+  may; our day-1 mining rules condition on the partner (Pause Handling rejects candidates where the partner
+  spoke, Verbal Interruption requires `b_stop ≤ 1.5 s`, Turn-taking's window ends at the partner's onset, Verbal
+  Backchanneling is built around the partner's token). GT latency (~500 ms) is tight for the same reason. Models
+  and random are still judged fairly against the windows; only the GT line is inflated. Fix = re-mine with
+  user-cue-only windows (fixed post-cue window), which changes the manifest. Day-2 nonverbal rules key on
+  video events and are less circular (GT 75–88 %).

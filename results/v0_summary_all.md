@@ -194,3 +194,11 @@ Judge: gpt-4o. n = manifest rows (clip, bucket) scored. Notation follows the Vid
   one place AV is ≥ a2a (OpenAI 4.50 vs 3.69): both stay silent through a look-away pause (TOR 88–100 %).
 - Run meta for the new clips: max_drift under 70 ms; OpenAI logs a benign
   `conversation_already_has_active_response` on the text kick for ~8 clips (the response still arrives).
+- **Human-reference TOR-Align is 100 % by construction on the day-1 dynamics** (paper: 90 % perception /
+  78 % generation). The paper's windows annotate the *user's* cue and let the partner's reaction fall where it
+  may; our day-1 mining rules condition on the partner (Pause Handling rejects candidates where the partner
+  spoke, Verbal Interruption requires `b_stop ≤ 1.5 s`, Turn-taking's window ends at the partner's onset, Verbal
+  Backchanneling is built around the partner's token). GT latency (~500 ms) is tight for the same reason. Models
+  and random are still judged fairly against the windows; only the GT line is inflated. Fix = re-mine with
+  user-cue-only windows (fixed post-cue window), which changes the manifest. Day-2 nonverbal rules key on
+  video events and are less circular (GT 75–88 %).

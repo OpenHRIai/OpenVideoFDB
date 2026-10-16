@@ -213,3 +213,7 @@ Ground). Reproduce this before trusting any model score.
   pads a "yeah" to 1.04 s) and 50 % on Turn-taking (word onsets 80–370 ms after
   the end of our 0.3–1.3 s handoff windows), far below the paper's ≈78 % GT.
 - Mining is rule-based + VLM-verified with spot checks, not a 3-pass human pipeline.
+- Day-1 dynamic windows are mined with rules that condition on the partner's behaviour (partner
+  silent through the pause, partner stops ≤ 1.5 s, handoff window ends at the partner's onset, window built
+  around the partner's backchannel), so the human reference passes the timing rules by construction
+  (TOR-Align 100 % vs the paper's 90 % / 78 %). Paper windows annotate the user's cue only. See results notes.
