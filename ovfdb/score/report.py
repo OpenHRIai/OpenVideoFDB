@@ -69,13 +69,14 @@ MODEL_NAMES: dict[tuple[str, str], str] = {
     ("tavus", ""): "Tavus Griffin Lite",
     ("tavus_cvi", ""): "Tavus CVI, cascaded (Phoenix-4.5, tavus-gemma-4)",
     ("anam", ""): "Anam, cascaded (Cara-4, Gemini 3 Flash)",
+    ("heygen", ""): "HeyGen LiveAvatar, cascaded (Helen, gpt-5.4-nano)",
 }
 #: What the agent emits: "A" (audio only) or "AV" (audio + video). The human partner and the
 #: mismatched-partner baseline are real people on camera, so AV. `tavus_cvi` runs with --mode av
-#: (AV2AV: Tavus's own cascaded CVI pipeline sees the user video); `anam` with --mode a2a (A2AV, cascaded).
+#: (AV2AV: Tavus's own cascaded CVI pipeline sees the user video); `anam` and `heygen` with --mode a2a (A2AV, cascaded).
 OUTPUT_MODALITY: dict[str, str] = {
     "human_gt": "AV", "random": "AV", "gemini_live": "A", "openai_realtime": "A",
-    "tavus": "AV", "tavus_cvi": "AV", "anam": "AV", "keyframe": "AV",
+    "tavus": "AV", "tavus_cvi": "AV", "anam": "AV", "heygen": "AV", "keyframe": "AV",
 }
 #: Row-group order and headers as on the project page (Tables 1 and 2).
 SETTING_GROUPS: list[tuple[str, str]] = [
@@ -305,6 +306,17 @@ def has_generation_scores(run_dirs: Iterable[str | Path], judge: str | None = No
     return False
 
 
+def generation_only_runs(df: pd.DataFrame, run_dirs: Iterable[str | Path], judge: str | None = None,
+                         keep: set[tuple[str, str]] | None = None) -> set[str]:
+    """Run names (`df["run"]`, from `summarise` without a bucket) that carry generation judge scores but no
+    perception judge axis on any row. Timing-only runs (no judge yet) are not generation-only."""
+    if df.empty:
+        return set()
+    no_perception = set(df.loc[df["Overall_n"] == 0, "run"])
+    return {Path(rd).name for rd in run_dirs
+            if Path(rd).name in no_perception and has_generation_scores([rd], judge, keep)}
+
+
 def _paper_order(df: pd.DataFrame) -> pd.DataFrame:
     """Stable sort into the project page's group order (reference, random, AV2AV, AV2A, A2A, A2AV)."""
     if df.empty or "group" not in df:
@@ -452,6 +464,12 @@ def write(run_dirs: Iterable[str | Path], per_dynamic: bool = False, out: str | 
     out.parent.mkdir(parents=True, exist_ok=True)
     keep = row_filter(manifest, rows)
     df = summarise(run_dirs, judge=judge, n_boot=n_boot, seed=seed, keep=keep)
+    # Video-out runs judged only by the generation judge (the avatars) have no perception axes: they would show a
+    # row of "—" with timing from incidental rows, so they go to the Generation tables only (as on the project
+    # page, where the cascaded avatars appear in Table 2 only).
+    gen_only = generation_only_runs(df, run_dirs, judge, keep)
+    if gen_only:
+        df = df[~df["run"].isin(gen_only)].reset_index(drop=True)
     df.to_csv(out.with_suffix(".csv"), index=False)
     judges = sorted({str(j) for j in df.get("judge", pd.Series(dtype=object)).dropna()}) if not df.empty else []
     scope = (f" Rows restricted to {'the first ' + str(rows) + ' rows of ' if rows else ''}{manifest}."
@@ -464,11 +482,20 @@ def write(run_dirs: Iterable[str | Path], per_dynamic: bool = False, out: str | 
             f"/ median latency ms over timed rows; an agent already talking when the window opens counts as 0 ms, "
             "so read latency together with TOR-Align. The second table repeats the metrics with 95 % bootstrap CIs over rows "
             f"({n_boot} resamples, seed {seed}).")
+    if gen_only:
+        note += (f" Runs scored only by the generation judge ({', '.join(sorted(gen_only))}) are listed in the "
+                 "Generation tables only.")
     parts = [
         "# OpenVideoFDB summary",
         "",
         f"Runs: {', '.join(str(r) for r in run_dirs)}  ",
         note,
+        "",
+        "# Perception (project page Table 1)",
+        "",
+        ("All rows of each run scored with the perception rubrics (Fluency, Conversational Flow, Semantic/Visual "
+         "Grounding; text judge on the agent's audio and transcript), so audio-out agents are included; Timing "
+         "covers every timed row."),
         "",
         to_paper_markdown(df, ["Setting"]),
         "## With 95 % bootstrap CIs",
@@ -477,6 +504,8 @@ def write(run_dirs: Iterable[str | Path], per_dynamic: bool = False, out: str | 
     ]
     if per_dynamic:
         pdf = _per_dynamic_table(run_dirs, judge=judge, n_boot=n_boot, seed=seed, keep=keep)
+        if gen_only and not pdf.empty:
+            pdf = pdf[~pdf["run"].isin(gen_only)].reset_index(drop=True)
         pdf.to_csv(out.with_name(out.stem + "_per_dynamic.csv"), index=False)
         parts += ["## Per dynamic", "", to_paper_markdown(pdf, ["Setting", "dynamic_type"]),
                   "## Per dynamic with 95 % bootstrap CIs", "",
@@ -484,17 +513,21 @@ def write(run_dirs: Iterable[str | Path], per_dynamic: bool = False, out: str | 
     if has_generation_scores(run_dirs, judge, keep):
         g = Bucket.GENERATION.value
         gdf = summarise(run_dirs, judge=judge, n_boot=n_boot, seed=seed, keep=keep, bucket=g)
-        gdf = gdf[gdf["n"] > 0]
+        # only runs with generation judge scores (audio-out agents have none; the project page's Table 2 lists
+        # video-out agents only) — the others would show a row of "—" with timing from their generation rows
+        no_gen = sorted(set(gdf.loc[gdf["Overall_n"] == 0, "run"]))
+        gdf = gdf[gdf["Overall_n"] > 0].reset_index(drop=True)
         gdf.to_csv(out.with_name(out.stem + "_generation.csv"), index=False)
         parts += [
-            "# Generation",
+            "# Generation (project page Table 2)",
             "",
             ("Generation-bucket rows only (project page Table 2): Fluency = Generation Fluency, Dyadic Affect = "
              "Affect Match, NV Cue Approp. = cue_appropriateness of the per-category decomposed rubric (vision judge "
              "on side-by-side frames, docs/protocol.md §6). Overall = mean of each generation row's available axes. "
              "Timing = TOR-Align % / median latency over the timed generation rows (Verbal Interruption, Turn-taking, "
              "Verbal Backchanneling); Laughter / Nonverbal Backchanneling / affect rows have no timing class. "
-             "n = generation rows present in the run (timing and/or judge); the CI table's per-axis n is in the CSV."),
+             "n = generation rows present in the run (timing and/or judge); the CI table's per-axis n is in the CSV."
+             + (f" Runs without generation judge scores ({', '.join(no_gen)}) are not listed here." if no_gen else "")),
             "",
             to_paper_markdown(gdf, ["Setting"], GEN_PAPER_COLUMNS),
             "## Generation with 95 % bootstrap CIs",
@@ -503,6 +536,8 @@ def write(run_dirs: Iterable[str | Path], per_dynamic: bool = False, out: str | 
         ]
         if per_dynamic:
             gpdf = _per_dynamic_table(run_dirs, judge=judge, n_boot=n_boot, seed=seed, keep=keep, bucket=g)
+            if no_gen and not gpdf.empty:
+                gpdf = gpdf[~gpdf["run"].isin(no_gen)].reset_index(drop=True)
             gpdf.to_csv(out.with_name(out.stem + "_generation_per_dynamic.csv"), index=False)
             parts += ["## Generation per dynamic", "",
                       to_paper_markdown(gpdf, ["Setting", "dynamic_type"], GEN_PAPER_COLUMNS),

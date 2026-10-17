@@ -116,7 +116,7 @@ def test_write_markdown_and_csv(runs, tmp_path):
     gt, rnd = runs
     out = report.write([gt, rnd], per_dynamic=True, out=tmp_path / "results" / "summary.md")
     md = out.read_text()
-    assert md.startswith("# OpenVideoFDB summary")
+    assert md.startswith("# OpenVideoFDB summary") and "# Perception (project page Table 1)" in md
     # paper-notation table first: grouped rows, Model | Setting | n | axes | Overall | Timing
     assert "| Model | Setting | n | Fluency ↑ | Conv. Flow ↑ | Vis. Ground. ↑ | Overall ↑ | Timing ↑ |" in md
     assert "| **Human reference** |" in md and "| Human reference | AV2AV | 5 | 4.50 | 4.50 | 3.50 |" in md
@@ -188,3 +188,50 @@ def test_row_filter_matches_per_bucket_run_dirs(tmp_path):
     manifest.write_text(json.dumps({"clip_id": "x", "bucket": "perception"}) + "\n" + json.dumps({"clip_id": "x", "bucket": "generation"}) + "\n")
     df = report.summarise([run], keep=report.row_filter(manifest))
     assert list(df["n"]) == [2] and df.iloc[0]["Fluency_n"] == 1 and df.iloc[0]["TOR-Align %_n"] == 1
+
+
+def test_write_lists_generation_only_runs_in_generation_tables_only(runs, tmp_path):
+    """Avatar runs carry generation judge axes only; an incidental perception row (same clip dir, timing only)
+    must not put them in the perception table as a row of dashes. A timing-only run (no judge yet) stays."""
+    gt, rnd = runs
+    av = tmp_path / "heygen_a2av"
+    gen = {"generation_fluency": 4, "affect_match": 2, "cue_appropriateness": 0}
+    _clip(av, "c", "Turn-taking", gen, passed=True, latency=1800.0, provider="heygen", mode="a2a",
+          bucket="generation")
+    _clip(av, "c", "Laughter", None, provider="heygen", mode="a2a")        # incidental perception row
+    timed = tmp_path / "timed_only"
+    _clip(timed, "a", "Pause Handling", None, passed=True, latency=400.0, provider="random")
+
+    df = report.summarise([gt, rnd, av, timed])
+    assert report.generation_only_runs(df, [gt, rnd, av, timed]) == {"heygen_a2av"}
+
+    out = report.write([gt, rnd, av, timed], per_dynamic=True, out=tmp_path / "r" / "s.md")
+    md = out.read_text()
+    top, gen_part = md.split("# Generation (project page Table 2)", 1)
+    assert "HeyGen" not in top and "heygen_a2av" in top              # named in the note, not as a row
+    assert "listed in the Generation tables only" in top
+    assert "| HeyGen LiveAvatar, cascaded (Helen, gpt-5.4-nano) | A2AV | 1 | 4.00 | 2.00 | 0.00 | 2.00 |" in gen_part
+    csv = (tmp_path / "r" / "s.csv").read_text()
+    assert "heygen_a2av" not in csv and "timed_only" in csv           # timing-only run kept in Table 1
+    assert "heygen_a2av" not in (tmp_path / "r" / "s_per_dynamic.csv").read_text()
+
+
+def test_write_lists_only_generation_judged_runs_in_generation_tables(runs, tmp_path):
+    """Audio-out runs (perception judge only) have generation rows with timing but no generation axes: they stay
+    in the perception table and are named, not listed, in the Generation tables (mirror of the avatar rule)."""
+    gt, rnd = runs
+    _clip(gt, "e", "Laughter", {"generation_fluency": 5, "affect_match": 3, "cue_appropriateness": 4},
+          bucket="generation")
+    api = tmp_path / "gemini_live_av"
+    _clip(api, "a", "Pause Handling", {"fluency": 3, "conversational_flow": 3}, passed=True, latency=900.0,
+          provider="gemini_live")
+    _clip(api, "c", "Turn-taking", None, passed=True, latency=1100.0, provider="gemini_live", bucket="generation")
+
+    out = report.write([gt, rnd, api], per_dynamic=True, out=tmp_path / "r" / "s.md")
+    top, gen_part = out.read_text().split("# Generation (project page Table 2)", 1)
+    assert "gemini_live_av" in (tmp_path / "r" / "s.csv").read_text()      # still in the perception table
+    assert "without generation judge scores" not in top
+    assert "without generation judge scores (gemini_live_av" in gen_part and "random" in gen_part
+    assert "| Human reference | AV2AV | 2 |" in gen_part
+    for csv in ("s_generation.csv", "s_generation_per_dynamic.csv"):
+        assert "gemini_live_av" not in (tmp_path / "r" / csv).read_text()

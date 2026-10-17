@@ -1,4 +1,4 @@
-"""Tavus CVI / Anam via headless Chrome (WS6b): the clip is the user's camera+mic, the remote avatar
+"""Tavus CVI / Anam / HeyGen LiveAvatar via headless Chrome (WS6b): the clip is the user's camera+mic, the remote avatar
 track is recorded.
 
 How it works (see `ovfdb/harness/web/avatar.html`):
@@ -15,8 +15,11 @@ How it works (see `ovfdb/harness/web/avatar.html`):
 
 Vendors: `tavus` (full CVI pipeline: Raven perception sees the user video → AV2AV; default LLM
 tavus-gemma-4, stock Phoenix-4.5 replica) and `anam` (audio-only input → A2AV; stock Cara-4 avatar,
-hosted LLM). Env: TAVUS_API_KEY, TAVUS_REPLICA_ID, TAVUS_PERSONA_ID (created on first use and cached in
-`.tavus_persona`), ANAM_API_KEY, ANAM_AVATAR_ID, ANAM_VOICE_ID, ANAM_LLM_ID.
+hosted LLM) and `heygen` (LiveAvatar FULL mode over LiveKit: the clip's audio is published as the user's
+mic, no video in → A2AV; stock "Helen (Friendly)", LiveAvatar-hosted OpenAI LLM). Env: TAVUS_API_KEY,
+TAVUS_REPLICA_ID, TAVUS_PERSONA_ID (created on first use and cached in `.tavus_persona`), ANAM_API_KEY,
+ANAM_AVATAR_ID, ANAM_VOICE_ID, ANAM_LLM_ID, HEYGEN_API_KEY (the LiveAvatar key from app.liveavatar.com, not the
+HeyGen platform key), HEYGEN_AVATAR_ID, HEYGEN_VOICE_ID, HEYGEN_LLM, HEYGEN_SANDBOX (1 = free sandbox avatar only).
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import functools
+import hashlib
 import http.server
 import json
 import logging
@@ -45,7 +49,7 @@ from ovfdb.harness.base import AudioOut, Mode
 
 log = logging.getLogger("ovfdb.avatar")
 
-_QUOTA_RE = re.compile(r"usage limit|insufficient|credit|quota|exceeded your", re.IGNORECASE)
+_QUOTA_RE = re.compile(r"usage limit|insufficient|credit|quota|exceeded your|NO_CREDITS", re.IGNORECASE)
 _BUSY_RE = re.compile(r"concurrency limit", re.IGNORECASE)      # previous session not yet released: retry
 BUSY_RETRY_S = 25.0
 BUSY_RETRIES = 4
@@ -61,6 +65,7 @@ def _quota_check(msg: str) -> None:
 
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"
 READY_TIMEOUT_S = 90.0
+SESSION_SLACK_S = 60.0           # vendor session max = clip + this (billing is by time actually used)
 STOP_TIMEOUT_S = 30.0
 
 TAVUS_BASE = "https://tavusapi.com/v2"
@@ -73,6 +78,17 @@ ANAM_BASE = "https://api.anam.ai/v1"
 ANAM_DEFAULT_AVATAR = "edf6fdcb-acab-44b8-b974-ded72665ee26"   # "Mia" (studio), cara-4 stock
 ANAM_DEFAULT_VOICE = "90919e2e-4fc0-11f1-84b0-52bacf74fa75"    # "Michelle - Empathetic Voice"
 ANAM_DEFAULT_LLM = "27cbd128-f1e6-4b67-8ab3-9123659be08c"      # "Gemini 3 Flash Preview" (Anam-hosted)
+
+HEYGEN_BASE = "https://api.liveavatar.com/v1"
+HEYGEN_DEFAULT_AVATAR = "0cbed480-e2e3-453e-a85d-3cd69b97e2b2"  # "Helen (Friendly)", stock, its default voice
+HEYGEN_SANDBOX_AVATAR = "dd73ea75-1218-4ef3-92ce-606d5f7fbc0a"  # the only avatar sandbox sessions render
+HEYGEN_DEFAULT_LLM = "gpt-5.4-nano"                              # LiveAvatar's managed default (OpenAIModelEnum)
+HEYGEN_MIN_MARGIN_S = 15.0       # clip + 5 s streamer tail + join/teardown must fit inside a capped session
+HEYGEN_CONTEXT_FILE = Path(".heygen_context")    # JSON {key fingerprint: context id}; contexts are per account
+#: One stored context for every row; the row's system prompt (≤ 424 chars on NVIDIA, limit 1000) is
+#: substituted per session through `dynamic_variables`. Empty opening text: who speaks first is the
+#: harness's call (a `avatar.speak_response` kick, as the Gemini/OpenAI providers do with a text turn).
+HEYGEN_CONTEXT_PROMPT = "${system_prompt}"
 
 
 def _free_port() -> int:
@@ -162,20 +178,101 @@ class AnamSession:
         return None
 
 
+class HeyGenSession:
+    """LiveAvatar FULL mode: POST /sessions/token (API key) → POST /sessions/start (session token) → LiveKit."""
+
+    def __init__(self, api_key: str, avatar_id: str = "", voice_id: str = "", llm: str = "") -> None:
+        self.h = {"X-API-KEY": api_key, "Content-Type": "application/json"}
+        self.key_fp = hashlib.sha256(api_key.encode()).hexdigest()[:12]
+        self.sandbox = os.getenv("HEYGEN_SANDBOX", "0").strip().lower() in ("1", "true", "yes")
+        default = HEYGEN_SANDBOX_AVATAR if self.sandbox else HEYGEN_DEFAULT_AVATAR
+        self.avatar_id = avatar_id or os.getenv("HEYGEN_AVATAR_ID") or default
+        self.voice_id = voice_id or os.getenv("HEYGEN_VOICE_ID") or ""
+        self.llm = llm or os.getenv("HEYGEN_LLM") or HEYGEN_DEFAULT_LLM
+        self.context_id = os.getenv("HEYGEN_CONTEXT_ID") or ""
+        self.session_id = ""
+        self.session_token = ""
+
+    @staticmethod
+    def _err(r: httpx.Response, what: str) -> RuntimeError:
+        _quota_check(r.text)
+        return RuntimeError(f"LiveAvatar {what} {r.status_code}: {r.text[:300]}")
+
+    async def ensure_context(self, client: httpx.AsyncClient) -> str:
+        if self.context_id:
+            return self.context_id
+        cache = json.loads(HEYGEN_CONTEXT_FILE.read_text()) if HEYGEN_CONTEXT_FILE.exists() else {}
+        if cache.get(self.key_fp):
+            self.context_id = cache[self.key_fp]
+            return self.context_id
+        body = {"name": "ovfdb-harness", "prompt": HEYGEN_CONTEXT_PROMPT, "opening_text": ""}
+        r = await client.post(f"{HEYGEN_BASE}/contexts", headers=self.h, json=body)
+        if r.status_code >= 400:
+            raise self._err(r, "create context")
+        self.context_id = r.json()["data"]["id"]
+        cache[self.key_fp] = self.context_id
+        HEYGEN_CONTEXT_FILE.write_text(json.dumps(cache))
+        log.info("HeyGen: created context %s", self.context_id)
+        return self.context_id
+
+    async def create(self, system_prompt: str, max_s: float, agent_speaks_first: bool) -> str:
+        async with httpx.AsyncClient(timeout=30) as client:
+            await self.ensure_context(client)
+            persona = {"context_id": self.context_id, "language": "en",
+                       "llm_settings": {"provider": "openai", "model": self.llm}}
+            if self.voice_id:
+                persona["voice_id"] = self.voice_id
+            body = {"mode": "FULL", "avatar_id": self.avatar_id, "is_sandbox": self.sandbox,
+                    "video_settings": {"quality": "high", "encoding": "H264"},
+                    "max_session_duration": int(max_s), "avatar_persona": persona,
+                    "interactivity_type": "CONVERSATIONAL",
+                    "dynamic_variables": {"system_prompt": system_prompt[:1000]}}
+            r = await client.post(f"{HEYGEN_BASE}/sessions/token", headers=self.h, json=body)
+            cap = re.search(r"maximum allowed \((\d+)s\)", r.text) if r.status_code == 400 else None
+            if cap:
+                # plan-level session cap (e.g. 120 s): fine if the clip + tail still fits with a margin
+                cap_s = int(cap.group(1))
+                if cap_s < max_s - SESSION_SLACK_S + HEYGEN_MIN_MARGIN_S:
+                    raise RuntimeError(f"LiveAvatar session cap {cap_s}s on this key is too short for this clip "
+                                       f"(needs {max_s - SESSION_SLACK_S + HEYGEN_MIN_MARGIN_S:.0f}s)")
+                body["max_session_duration"] = cap_s
+                r = await client.post(f"{HEYGEN_BASE}/sessions/token", headers=self.h, json=body)
+            if r.status_code >= 400 or not (r.json().get("data") or {}).get("session_token"):
+                raise self._err(r, "session token")
+            d = r.json()["data"]
+            self.session_id, self.session_token = d["session_id"], d["session_token"]
+            r = await client.post(f"{HEYGEN_BASE}/sessions/start",
+                                  headers={"Authorization": f"Bearer {self.session_token}"})
+            if r.status_code >= 400 or not (r.json().get("data") or {}).get("livekit_client_token"):
+                raise self._err(r, "start session")
+            d = r.json()["data"]
+            log.info("HeyGen: session %s (max %ss)", self.session_id, d.get("max_session_duration"))
+            return f"{d['livekit_url']}|{d['livekit_client_token']}"
+
+    async def end(self) -> None:
+        if not self.session_id:
+            return
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(f"{HEYGEN_BASE}/sessions/stop", headers=self.h,
+                                  json={"session_id": self.session_id, "reason": "USER_CLOSED"})
+            log.info("HeyGen: stop session %s → %s", self.session_id, r.status_code)
+
+
 # --- the agent -------------------------------------------------------------------
 
 class PlaywrightAvatar:
-    """Agent for a browser-SDK avatar vendor. `vendor` = "tavus" | "anam"."""
+    """Agent for a browser-SDK avatar vendor. `vendor` = "tavus" | "anam" | "heygen"."""
 
     def __init__(self, vendor: str, sample, model: str = "", headless: bool = True) -> None:
-        if vendor not in ("tavus", "anam"):
+        if vendor not in ("tavus", "anam", "heygen"):
             raise ValueError(f"unknown avatar vendor {vendor!r}")
         self.vendor = vendor
-        self.name = "tavus_cvi" if vendor == "tavus" else "anam"
+        self.name = {"tavus": "tavus_cvi", "anam": "anam", "heygen": "heygen"}[vendor]
         self.sample = sample
         self.headless = headless
         self.out: asyncio.Queue[AudioOut] = asyncio.Queue()
         self.errors: list[str] = []
+        self.quota_hit = ""              # set when the vendor ends a session for credits: the runner stops
         self.meta: dict = {}
         self.out_dir: Path | None = None
         self.agent_video_path: str | None = None
@@ -201,12 +298,18 @@ class PlaywrightAvatar:
                 raise RuntimeError("TAVUS_API_KEY missing in .env")
             self._session = TavusSession(key)
             self.model = model or f"tavus-cvi/{self._session.replica_id}"
-        else:
+        elif vendor == "anam":
             key = os.getenv("ANAM_API_KEY") or ""
             if not key:
                 raise RuntimeError("ANAM_API_KEY missing in .env")
             self._session = AnamSession(key)
             self.model = model or f"anam/{self._session.avatar_id[:8]}/{self._session.llm_id[:8]}"
+        else:
+            key = os.getenv("HEYGEN_API_KEY") or ""
+            if not key:
+                raise RuntimeError("HEYGEN_API_KEY (LiveAvatar key) missing in .env")
+            self._session = HeyGenSession(key)
+            self.model = model or f"liveavatar/{self._session.avatar_id[:8]}/{self._session.llm}"
 
     def set_out_dir(self, out_dir: str | Path) -> None:
         self.out_dir = Path(out_dir)
@@ -246,6 +349,11 @@ class PlaywrightAvatar:
                     self._ready.set()
                 elif ev == "started":
                     self._page_stats["rec_start_s"] = o.get("rec_start_s")
+                elif ev == "vendor_stopped":
+                    reason = str(o.get("reason") or "")
+                    self.errors.append(f"vendor ended session: {reason}")
+                    if _QUOTA_RE.search(reason):
+                        self.quota_hit = reason
                 elif ev in ("first_audio", "first_video"):
                     self._page_stats[f"{ev}_s"] = o.get("t")
                 elif ev == "stopped":
@@ -257,7 +365,7 @@ class PlaywrightAvatar:
     # -- Agent protocol --
     async def start(self, system_prompt: str, mode: Mode, *, agent_speaks_first: bool = False) -> None:
         clip_s = _wav_seconds(self.sample.user_audio_path)
-        max_s = clip_s + 60.0
+        max_s = clip_s + SESSION_SLACK_S
         for attempt in range(BUSY_RETRIES + 1):
             try:
                 await self._start_once(system_prompt, max_s, agent_speaks_first)
@@ -292,7 +400,14 @@ class PlaywrightAvatar:
         self._page = await ctx.new_page()
         self._page.on("console", lambda m: log.debug("%s console: %s", self.name, m.text))
         self._page.on("pageerror", lambda e: self.errors.append(f"pageerror: {e}"))
-        param = f"room={join}" if self.vendor == "tavus" else f"token={join}"
+        from urllib.parse import quote
+        if self.vendor == "tavus":
+            param = f"room={join}"
+        elif self.vendor == "anam":
+            param = f"token={join}"
+        else:
+            lk_url, lk_token = join.split("|", 1)
+            param = f"lk={quote(lk_url, safe='')}&token={lk_token}&kick={int(agent_speaks_first)}"
         url = (f"http://127.0.0.1:{http_port}/avatar.html?vendor={self.vendor}&ws={ws_port}"
                f"&video=/user.mp4&audio=/user.wav&{param}")
         t_join = time.monotonic()
@@ -305,7 +420,8 @@ class PlaywrightAvatar:
             _quota_check(self.errors[-1])
             raise RuntimeError(self.errors[-1])
         self.meta.update({"vendor": self.vendor, "join_s": round(time.monotonic() - t_join, 2),
-                          "session": getattr(self._session, "conversation_id", "") or "anam"})
+                          "session": getattr(self._session, "conversation_id", "")
+                          or getattr(self._session, "session_id", "") or "anam"})
         log.info("%s: avatar ready after %.1fs", self.name, self.meta["join_s"])
 
     async def push_audio(self, pcm16k: bytes, t: float) -> None:

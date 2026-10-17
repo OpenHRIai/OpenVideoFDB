@@ -26,8 +26,8 @@ evaluation code or official scorer. This repository provides:
 Status (2026-10-16): the pipeline reproduces the paper's human-reference numbers on the
 NVIDIA test split where that is computable, and the two API models land within 0.25
 overall of the project page on the full 226-row test split (both AV2A and A2A). The
-generation (video-out) judge is implemented and run on the human reference and on two
-cascaded avatar pipelines (Tavus CVI, Anam). See *Results* and *Status* below.
+generation (video-out) judge is implemented and run on the human reference and on three
+cascaded avatar pipelines (Tavus CVI, Anam, HeyGen LiveAvatar). See *Results* and *Status* below.
 
 ## Results
 
@@ -64,7 +64,7 @@ lower than the paper's; TOR-Alignment is 56–60 % against 66–72 %; our gpt-re
 latency is 1.1–1.4 s where the paper reports 4.4–5.4 s (onset definition, see the notes).
 The validation-split smoke test (11 public rows) is in `results/nvidia_validation.md`.
 
-**NVIDIA test split, generation bucket (video out), 121 rows** (`results/nvidia_generation.md`):
+**NVIDIA test split, generation bucket (video out), 121 rows** (`results/nvidia_test.md`, Generation section):
 vision judge on side-by-side frames, rubrics from the paper's F.6. Fluency / Dyadic Affect /
 NV Cue Approp. / Overall. The human reference exists for the 30 rows with a partner video.
 
@@ -74,12 +74,16 @@ NV Cue Approp. / Overall. The human reference exists for the 30 rows with a part
 | Random baseline | AV2AV | 121 | 2.17 | 1.77 | 0.97 | 1.63 | 31 % / 0 ms | — |
 | Tavus CVI, cascaded (Phoenix-4.5 + tavus-gemma-4) | AV2AV | 121 | 3.79 | 2.30 | 1.65 | 2.63 | 31 % / 1956 ms | (Griffin Lite, full-duplex: 3.83 / 63 % / 1892 ms) |
 | Anam, cascaded (Cara-4 + Gemini 3 Flash) | A2AV | 121 | 3.41 | 1.51 | 1.26 | 2.15 | 44 % / 2092 ms | Gemini 2.5 + Anam: 2.80 / 44 % / 2840 ms |
+| HeyGen LiveAvatar, cascaded (Helen + gpt-5.4-nano) | A2AV | 121 | 4.16 | 2.33 | 1.52 | 2.74 | 39 % / 1800 ms | — |
 
-Both avatars are the vendors' hosted cascaded pipelines (STT → LLM → TTS → lip-synced
-renderer); Tavus CVI additionally sees the user's camera. Neither produces a laugh, nod or
-smile inside a window (NV Cue 0.00 on all Laughter and Nonverbal Backchanneling rows),
-which reproduces the paper's finding that cascaded avatars cannot insert nonverbal cues
-during the user's turn. Fluency, cue and timing match the paper's cascaded rows; Dyadic
+All three avatars are the vendors' hosted cascaded pipelines (STT → LLM → TTS → lip-synced
+renderer); Tavus CVI additionally sees the user's camera. None of them laughs, nods or smiles
+inside a window as a behaviour (NV Cue 0.00 on all 30 Laughter and Nonverbal Backchanneling
+rows for Tavus and Anam; one smiling row on each dynamic for HeyGen), which reproduces the
+paper's finding that cascaded avatars cannot insert nonverbal cues during the user's turn.
+HeyGen and Tavus CVI are not separable overall (paired difference +0.12, 95 % CI −0.12 to +0.35);
+HeyGen is more fluent (+0.37, CI +0.11 to +0.64) and both are above Anam. CIs cover row sampling
+only (one judge, one run per vendor); see the generation notes in `results/nvidia_test.md`. Fluency, cue and timing match the paper's cascaded rows; Dyadic
 Affect runs lower for every configuration including the human reference (judge-side offset,
 see the notes).
 
@@ -172,8 +176,7 @@ docs/reference/        verbatim paper text (CC BY 4.0) and the project-page tabl
   spans, timestamped transcript) on top of the paper's template. Rubric text is verbatim.
 - The open clip set comes from studio face-to-face conversations, not video calls, and is
   mined by rules plus a VLM check plus a human review page, not a three-pass annotation.
-- Not implemented yet: the generation (video-out) judge, avatar agents (Tavus, Anam), a
-  second judge model for agreement numbers.
+- Not implemented yet: a second judge model for agreement numbers.
 
 ## Licences and attribution
 

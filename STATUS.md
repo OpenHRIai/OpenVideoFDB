@@ -50,7 +50,7 @@ Re-running: `ovfdb run` is resumable (skips dirs with run.json); a connection dr
   LLM tavus-gemma-4, persona cached in `.tavus_persona`) and `anam` (audio-only input → A2AV, stock Cara-4 "Mia",
   Anam-hosted Gemini 3 Flash; `getUserMedia` is overridden in the page so the SDK's mic = the clip — without that
   Anam never hears the user and monologues "it's been quiet").
-- Runs on the 121 generation rows (human-reference rows first): `runs_nv/tavus_av2av` **done and scored** (see results/nvidia_generation.md notes for run facts);
+- Runs on the 121 generation rows (human-reference rows first): `runs_nv/tavus_av2av` **done and scored** (see the generation notes in results/nvidia_test.md for run facts);
   `runs_nv/anam_a2av` **done** (121 rows over five free-tier keys ANAM_API_KEY..KEY5, three parallel shards via
   `shard=(i,3)` with `ANAM_API_KEY` exported per process; "Concurrency limit" right after a close is transient and
   retried; "Usage limit" aborts the shard cleanly, no run.json). Same command to resume/re-run:
@@ -62,6 +62,36 @@ Re-running: `ovfdb run` is resumable (skips dirs with run.json); a connection dr
   Tavus ≈ 145 min, Anam ≈ 125 min; perception rows would add about the same again. Plans: Tavus Starter $59/100 min
   + $0.37/min, Growth $397/1250 min; Anam Starter $12/50 min (5 min/session cap) + $0.16/min, Explorer $49/250 min.
   Generation judge (gpt-4o, 3 axes, ≤500 low-detail frames) ≈ $0.26/row → ≈ $32 per 121-row configuration.
+
+### WS6b HeyGen LiveAvatar (2026-10-17, session 4) — done
+- **Result** (`results/nvidia_test.md` Generation section, 121 generation rows): HeyGen **4.16 / 2.33 / 1.52 / 2.74**, TOR 39 % /
+  1800 ms. Paired bootstrap vs Tavus CVI: overall +0.12 [−0.12, +0.35] → **no winner**; fluency +0.37 [+0.11, +0.64]
+  (survives Holm over 12 comparisons); both HeyGen and Tavus > Anam overall. Table in the results notes. NV cue on
+  Laughter/NVB = one smiling row each, rest 0 (same "no nonverbal cue during the user's turn" finding). README updated.
+- Vendor `heygen` in `playwright_avatar.py` + `web/avatar.html`: LiveAvatar FULL mode (REST token/start in Python,
+  LiveKit join in the page, clip audio published as the mic → A2AV; stock "Helen (Friendly)", gpt-5.4-nano; one stored
+  context `${system_prompt}` per key, cached by key fingerprint in `.heygen_context`; agent-speaks-first =
+  `avatar.speak_response` kick at t=0). Plan session caps ("maximum allowed (120s)") are absorbed when clip + 15 s
+  fits. `session.stopped NO_CREDITS` mid-row → run.json removed + run stops (`agent.quota_hit`).
+- Tests: `tests/test_avatar_heygen.py` (23, mocked HTTP + fake page WS + fake agent; mutation-checked).
+- Tooling: `scripts/run_avatar_keys.py` rotates HEYGEN_API_KEY/_KEY2/_KEY3 (`--keys K --ignore-credits` for
+  overage), re-runs failed starts / no-video rows; `scripts/memguard.py` logs physical footprints and kills runaway
+  harness browsers / run processes before the machine runs out of memory.
+- Keys: HEYGEN_API_KEY* must be **LiveAvatar** keys (app.liveavatar.com), not HeyGen platform keys (api.heygen.com
+  streaming endpoints are gone). FULL = 2 credits/min, ≈ 2.1 credits/row; this run ≈ 260 credits.
+- Gotchas: macOS RSS hides compressed memory — use `memguard.footprint_mb`. Both "out of application memory"
+  crashes today were a detached `~/.cache/smart-turn-multimodal-quant` `requant2.py --method percentile` job
+  (> 20 GB in a minute), not the harness (harness Chrome 0.6–1.3 GB). `pgrep -f "<pattern>"` inside a shell loop
+  matches its own command line — use `[p]attern`.
+- Scoring: `ovfdb score-timing` + `ovfdb score-generation runs_nv/heygen_a2av --manifest manifest/nvidia_test.jsonl`
+  (≈ $30, ≈ 1.6 h serial). **One NVIDIA report** (`results/nvidia_generation.*` merged in, 2026-10-17):
+  `ovfdb report runs_nv/gt runs_nv/random runs_nv/gemini_live_av runs_nv/gemini_live_a2a runs_nv/openai_realtime_av
+  runs_nv/openai_realtime_a2a runs_nv/tavus_av2av runs_nv/anam_a2av runs_nv/heygen_a2av --manifest
+  manifest/nvidia_test.jsonl --per-dynamic --out results/nvidia_test.md`, then re-append the two Notes sections
+  (perception, generation) — the report overwrites the file. Sections: Perception (Table 1) and Generation (Table 2).
+- `report.write` now leaves generation-only runs (avatars: generation judge axes, no perception axes) out of the
+  perception table and names them in its note — they used to show n = 145 with "—" cells (24 dual-bucket clips
+  got a timing-only perception row). Test: `test_write_lists_generation_only_runs_in_generation_tables_only`.
 
 ### Next (priority order)
 1. Tavus CVI on the 105 perception rows (paper Table 1 AV2AV row; ≈ 145 Tavus minutes) — `run_manifest(..., provider='tavus', bucket='perception')`, then `ovfdb score` (perception judge) and add to `results/nvidia_test.md`. Affect-Match offset: try adding an agent-side visual/audio caption (Gemini Flash) to the generation payload and re-judge gt.
@@ -123,7 +153,7 @@ Re-running: `ovfdb run` is resumable (skips dirs with run.json); a connection dr
 | WS3 harness (Gemini Live) | done | agent (session 1) | 2026-10-15 | streamer/recorder/human_gt/random/gemini_live; live smoke OK on `gemini-3.1-flash-live-preview` (AV + a2a), drift < 40 ms, no errors. `scripts/smoke_gemini_live.py` |
 | WS4 scoring: ASR + timing | done | agent (session 1) | 2026-10-15 | segments/timing/asr/pipeline; 31 tests; faster-whisper small.en int8 ≈ 8× RT. `timing.json` carries all judge blocks except caption/user words |
 | WS5 judge + calibration | done (payload v2 calibrated) | session 2 | 2026-10-16 | rubrics verbatim, judge (gpt-4o/claude/gemini backends), report w/ bootstrap CIs. Payload v2: GT 4.12 vs random 2.70; results/calibration_v2.md. ≈$0.013/row-axis |
-| WS6 providers: OpenAI RT, Tavus/Anam, gen judge | **done** (6a, 6b Tavus + Anam on the 121 generation rows, 6c) | session 3 (+ agent for 6c) | 2026-10-17 | `results/nvidia_generation.md`: gt 4.17/3.30/3.00/3.49 (paper 3.92), random 1.63, **Tavus CVI 3.79/2.30/1.65/2.63** (31 %/1956 ms), **Anam 3.41/1.51/1.26/2.15** (44 %/2092 ms; paper Gemini 2.5+Anam 2.80, 44 %/2840). Judge `score-generation` (gpt-4o vision, F.6 rubrics, ≈$0.26/row). Harness `playwright_avatar.py` + `web/avatar.html` (`run_manifest(bucket, partner_video_first, shard)`). Not run: Tavus perception rows (Table 1 AV2AV) |
+| WS6 providers: OpenAI RT, Tavus/Anam/HeyGen, gen judge | **done** (6a, 6b Tavus + Anam + HeyGen on the 121 generation rows, 6c) | session 3 (+ agent for 6c) | 2026-10-17 | `results/nvidia_test.md` (Generation section): gt 4.17/3.30/3.00/3.49 (paper 3.92), random 1.63, **Tavus CVI 3.79/2.30/1.65/2.63** (31 %/1956 ms), **Anam 3.41/1.51/1.26/2.15** (44 %/2092 ms; paper Gemini 2.5+Anam 2.80, 44 %/2840), **HeyGen 4.16/2.33/1.52/2.74** (39 %/1800 ms). Judge `score-generation` (gpt-4o vision, F.6 rubrics, ≈$0.26/row). Harness `playwright_avatar.py` + `web/avatar.html` (`run_manifest(bucket, partner_video_first, shard)`). Not run: Tavus perception rows (Table 1 AV2AV) |
 | WS7 NVIDIA adapter + test-split runs | done | session 3 | 2026-10-16 | loader, gt/random, and the 4 API-model configs on all 226 test rows scored + reported: `results/nvidia_test.md`. Generation judge (WS6c) still todo |
 | WS8 report + publish | results tables done; README/publish todo | session 2 | 2026-10-16 | results/v0_summary.md (day-1 rows), results/v0_summary_all.md (all 118 rows) |
 

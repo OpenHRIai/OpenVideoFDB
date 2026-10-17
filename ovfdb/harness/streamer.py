@@ -280,9 +280,15 @@ def _make_anam(sample: Sample, samples: list[Sample], model: str) -> Agent:
     return PlaywrightAvatar("anam", sample, model)
 
 
+def _make_heygen(sample: Sample, samples: list[Sample], model: str) -> Agent:
+    from ovfdb.harness.providers.playwright_avatar import PlaywrightAvatar
+    return PlaywrightAvatar("heygen", sample, model)
+
+
 PROVIDERS: dict[str, Callable[[Sample, list[Sample], str], Agent]] = {
     "tavus": _make_tavus,
     "anam": _make_anam,
+    "heygen": _make_heygen,
     "gemini_live": _make_gemini,
     "openai_realtime": _make_openai_realtime,
     "human_gt": _make_human_gt,
@@ -346,6 +352,12 @@ def run_manifest(manifest: str | Path, provider: str, mode: str = "av", out: str
                         log.error("VENDOR QUOTA: %s — stopping after %d run(s)", e, len(results))
                         return
                     raise
+                if getattr(agent, "quota_hit", ""):        # vendor ended the session for credits mid-row
+                    (clip_dir / "run.json").unlink(missing_ok=True)
+                    abort.append(agent.quota_hit)
+                    log.error("VENDOR QUOTA mid-row (%s): %s — row left to re-run; stopping after %d run(s)",
+                              s.clip_id, agent.quota_hit, len(results))
+                    return
                 if run.errors:
                     log.warning("%s: %d error(s): %s", s.clip_id, len(run.errors), run.errors[:2])
                 results.append(run)

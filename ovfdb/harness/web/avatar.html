@@ -12,12 +12,13 @@
 </div>
 <div id="log"></div>
 <script>
-// Harness page for WebRTC-only avatar vendors (Tavus CVI via Daily, Anam via its JS SDK).
-// Query: ?vendor=tavus|anam&ws=<port>&video=/clip/user.mp4&audio=/clip/user.wav&room=<daily url>|&token=<anam token>
+// Harness page for WebRTC-only avatar vendors (Tavus CVI via Daily, Anam via its JS SDK, HeyGen LiveAvatar via LiveKit).
+// Query: ?vendor=tavus|anam|heygen&ws=<port>&video=/clip/user.mp4&audio=/clip/user.wav&room=<daily url>|&token=<anam token>
+//        heygen: &lk=<livekit url>&token=<livekit client token>&kick=0|1 (1 = agent speaks first)
 // Protocol over the WebSocket (JSON text frames unless noted):
 //   page -> py: {"ev":"log",...} | {"ev":"ready", ...} | {"ev":"started", t0_ms} | {"ev":"first_audio"|"first_video", t} |
 //               binary: 0x01 + float64 t_s + int16 pcm (16 kHz mono, agent audio)   | 0x02 + webm blob (at stop)
-//               {"ev":"stopped", ...stats}
+//               {"ev":"stopped", ...stats} | {"ev":"vendor_stopped", reason}
 //   py -> page: {"cmd":"go"} | {"cmd":"stop"}
 const q = new URLSearchParams(location.search);
 const vendor = q.get("vendor");
@@ -173,6 +174,47 @@ async function joinAnam() {
   leave = async () => { await client.stopStreaming(); };
 }
 
+let onGo = () => {};
+
+async function joinHeygen() {
+  // LiveAvatar FULL mode, the same steps as @heygen/liveavatar-web-sdk 0.0.19 (LiveAvatarSession/VoiceChat):
+  // connect to the LiveKit room, publish the user's mic (here: the clip's audio track), take the tracks of
+  // participant "heygen", events as JSON on data topic "agent-response", commands on "agent-control".
+  await new Promise((res, rej) => { const s = document.createElement("script"); s.src = "https://unpkg.com/livekit-client@2.15.7/dist/livekit-client.umd.js"; s.onload = res; s.onerror = () => rej(new Error("livekit-client load failed")); document.head.appendChild(s); });
+  const LK = window.LivekitClient;
+  const room = new LK.Room({adaptiveStream: false, dynacast: false});
+  window._room = room;
+  const gotTracks = new Promise(res => room.on(LK.RoomEvent.TrackSubscribed, (track, _pub, p) => {
+    log("remote track", track.kind, p.identity);
+    if (p.identity !== "heygen") return;
+    if (track.kind === "video" && !remoteVideoTrack) remoteVideoTrack = track.mediaStreamTrack;
+    if (track.kind === "audio" && !remoteAudioTrack) remoteAudioTrack = track.mediaStreamTrack;
+    if (remoteVideoTrack && remoteAudioTrack) res();
+  }));
+  const dec = new TextDecoder();
+  room.on(LK.RoomEvent.DataReceived, (payload, _p, _k, topic) => {
+    if (topic !== "agent-response") return;
+    let e; try { e = JSON.parse(dec.decode(payload)); } catch (err) { return; }
+    const t = e.event_type;
+    if (t === "user.speak_started") stats.n_user_speech = (stats.n_user_speech || 0) + 1;
+    else if (t === "avatar.speak_started") stats.n_avatar_turns = (stats.n_avatar_turns || 0) + 1;
+    else if (t === "avatar.transcription" || t === "user.transcription") log("heygen", t, t0ms === null ? "pre" : nowS().toFixed(2), e.text);
+    else if (t === "session.stopped") { log("heygen session.stopped", e.end_reason); send({ev: "vendor_stopped", reason: e.end_reason}); }
+    else if (!String(t).endsWith(".chunk")) log("heygen event", t);
+  });
+  room.on(LK.RoomEvent.Disconnected, (r) => log("livekit disconnected", r));
+  await room.connect(q.get("lk"), q.get("token"));
+  log("joined livekit room");
+  await room.localParticipant.publishTrack(userStream.getAudioTracks()[0], {source: LK.Track.Source.Microphone, name: "microphone"});
+  log("published user audio");
+  await gotTracks;
+  remoteStream = new MediaStream([remoteVideoTrack, remoteAudioTrack]);
+  document.getElementById("agent").srcObject = remoteStream;
+  const command = (event_type, extra) => room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({event_id: crypto.randomUUID(), event_type, ...(extra || {})})), {reliable: true, topic: "agent-control"});
+  if (q.get("kick") === "1") onGo = () => { stats.kick_s = nowS(); command("avatar.speak_response", {text: "Start speaking now to begin/continue the conversation."}); };
+  leave = async () => { await room.disconnect(); };
+}
+
 async function main() {
   ws = new WebSocket("ws://127.0.0.1:" + q.get("ws"));
   await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
@@ -180,13 +222,13 @@ async function main() {
   try {
     await ctx.resume();
     await makeUserStream();
-    if (vendor === "tavus") await joinTavus(); else if (vendor === "anam") await joinAnam(); else throw new Error("unknown vendor " + vendor);
+    if (vendor === "tavus") await joinTavus(); else if (vendor === "anam") await joinAnam(); else if (vendor === "heygen") await joinHeygen(); else throw new Error("unknown vendor " + vendor);
     if (!remoteVideoTrack || !remoteAudioTrack) throw new Error("no remote tracks");
     send({ev: "ready", video: remoteVideoTrack.getSettings(), audio: !!remoteAudioTrack});
   } catch (e) { log("setup failed", String(e && e.stack || e)); send({ev: "error", msg: String(e)}); return; }
   ws.onmessage = async (m) => {
     const o = JSON.parse(m.data);
-    if (o.cmd === "go") { const t = startUserPlayback(); await startRemoteCapture(); send({ev: "started", t0_ms: t, rec_start_s: stats.recorder_start_s}); }
+    if (o.cmd === "go") { const t = startUserPlayback(); await startRemoteCapture(); onGo(); send({ev: "started", t0_ms: t, rec_start_s: stats.recorder_start_s}); }
     else if (o.cmd === "stop") { await stopAll(); }
   };
 }
