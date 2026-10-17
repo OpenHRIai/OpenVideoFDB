@@ -12,38 +12,24 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   `score/pipeline.iter_rows`; `report` is unaffected (it reads clip_id from timing.json).
 - 2026-10-15 — `harness/base.py`: `AudioOut` gained `flush: bool = False` (barge-in: drop queued-unplayed audio at `t_received`; maps Gemini `server_content.interrupted`). Providers stamp `t_received` on their own clock (t=0 at first `push_audio`); streamer re-stamps on drain, keeps provider value as `t_agent` in events. (WS3)
 
-## HANDOFF 2026-10-16 (end of session 2) — read this first
+## HANDOFF 2026-10-16 (end of session 3) — read this first
 **v0.1.0 is released** (GitHub `OpenHRIai/OpenVideoFDB` + tag/release, HF dataset `OpenHRI/open-videofdb`).
 Remotes in this checkout: `origin` = susurobo/OpenVideoFDB, `openhri` = OpenHRIai/OpenVideoFDB — **push both**.
 Announcement drafts: `docs/announcement.md`; final example video (not in git): `data/announcement/example_laughter_frisbee.mp4`.
 
-### Next job: the four model configurations on the full NVIDIA test split (226 rows / 172 clips)
-Prerequisites already in place: `data/nvidia/` (full snapshot, 4.7 GB), `manifest/nvidia_test.jsonl` (git-ignored;
-regenerate with `uv run ovfdb nvidia manifest --split test`), human reference + random already run and scored in
-`runs_nv/gt` (60 rows) and `runs_nv/random` (226 rows) — see `results/nvidia_test_baselines.md`. Keys in `.env`.
-Budget: ≈141 min of audio per configuration; ≈1.5 h wall with the four in parallel (concurrency 2 each);
-≈$20–30 realtime-API audio + frames; judge ≈$1.4 per run (105 perception rows). Both API models run on validation
-without errors (`results/nvidia_validation.md`).
-
-```bash
-# 1. runs (resumable: existing <clip>/run.json are skipped; dual-bucket clips get <clip>__<bucket> dirs)
-uv run ovfdb run manifest/nvidia_test.jsonl --provider gemini_live     --mode av  --out runs_nv/gemini_live_av      --concurrency 2
-uv run ovfdb run manifest/nvidia_test.jsonl --provider gemini_live     --mode a2a --out runs_nv/gemini_live_a2a     --concurrency 2
-uv run ovfdb run manifest/nvidia_test.jsonl --provider openai_realtime --mode av  --out runs_nv/openai_realtime_av  --concurrency 2
-uv run ovfdb run manifest/nvidia_test.jsonl --provider openai_realtime --mode a2a --out runs_nv/openai_realtime_a2a --concurrency 2
-# 2. check: every run dir should have 226 rows reachable (172 clips, 54 of them split per bucket)
-#    grep -c "INFO run " <log>; grep -ci "error\|traceback" <log>   (OpenAI logs a benign conversation_already_has_active_response on the text kick)
-# 3. score (ASR + VAD + timing + gpt-4o judge; ALWAYS pass --manifest: clip ids collide across manifest versions)
-for r in gemini_live_av gemini_live_a2a openai_realtime_av openai_realtime_a2a; do
-  uv run ovfdb score runs_nv/$r --manifest manifest/nvidia_test.jsonl; done
-# 4. tables (project-page notation) + notes, then commit results/ and push both remotes
-uv run ovfdb report runs_nv/gt runs_nv/random runs_nv/gemini_live_av runs_nv/gemini_live_a2a runs_nv/openai_realtime_av runs_nv/openai_realtime_a2a \
-   --manifest manifest/nvidia_test.jsonl --per-dynamic --out results/nvidia_test.md
-```
-Compare with the project page Table 1 (`docs/reference/nvidia_project_page_leaderboard.txt`): Gemini 3.1 Flash Live
-AV2A 2.84 / A2A 3.03, gpt-realtime AV2A 2.75 / A2A 2.97, timing 66–72 %. Then update README "Results", STATUS, and
-push `origin` + `openhri`. The validation rows (`runs_nv/*` dirs for the 8 validation clips) already sit in the same run
-dirs; they are harmless (different clip ids) but keep `--manifest manifest/nvidia_test.jsonl` for the table.
+### Done in session 3: the four model configurations on the full NVIDIA test split (226 rows / 172 clips)
+`runs_nv/{gemini_live,openai_realtime}_{av,a2a}` streamed (16:04–18:08, four in parallel, concurrency 2; one
+network drop at 16:39 cut 6 clip streams → dirs deleted and re-streamed; one process restart at 17:10, resumed),
+scored (`ovfdb score … --manifest manifest/nvidia_test.jsonl`, ≈$1.35 judge per run) and reported with
+`ovfdb report … --per-dynamic --out results/nvidia_test.md`. README "Results" updated.
+Headline (overall / TOR-Align / median latency; paper in brackets): Gemini AV2A 3.00 / 57 % / 1192 ms [2.84 / 66 % /
+1720], Gemini A2A 3.13 / 59 % / 1172 [3.03 / 69 % / 1240], gpt-realtime AV2A 3.00 / 56 % / 1412 [2.75 / 72 % / 5400],
+gpt-realtime A2A 2.88 / 60 % / 1108 [2.97 / 67 % / 4440]. Visual-stream ignorance reproduces (AV2A ≈ A2A).
+Deviations worth a look: Conv. Flow 0.4–1.1 above the paper, Gemini Fluency 0.4–0.5 below, TOR-Align ≈ 10 pt below,
+gpt-realtime latency 3–4 s below (onset definition). Verbal Backchanneling 0 % for every run incl. random (no agent
+backchannels inside the 1 s window). Notes at the end of `results/nvidia_test.md`.
+Re-running: `ovfdb run` is resumable (skips dirs with run.json); a connection drop leaves a run.json with
+`errors` — delete that dir and rerun. `ovfdb score` skips existing timing.json/judge.json unless `--force`.
 
 ### Gotchas learned today
 - Dual-bucket clips swap user/partner between buckets → run dirs `<clip_id>__<bucket>` (`schema.run_dir_names`);
@@ -56,7 +42,7 @@ dirs; they are harmless (different clip ids) but keep `--manifest manifest/nvidi
 - The NVIDIA licence allows publishing results, forbids redistributing data/derivatives: `runs_nv/`, `data/nvidia/`,
   `manifest/nvidia_*` stay local (all git-ignored). No NVIDIA frames in posts (academic publications only).
 
-### After that (priority order)
+### Next (priority order)
 1. Generation (video-out) judge (WS6c, protocol §6) — needed for Table 2 and the human-reference generation rows.
 2. Second judge (claude) for agreement numbers (`report.agreement`; needs ANTHROPIC_API_KEY).
 3. Seamless track items (see below): Verbal Backchanneling decision, laughter bleed fix, top-ups, v1 model runs.
@@ -117,7 +103,7 @@ dirs; they are harmless (different clip ids) but keep `--manifest manifest/nvidi
 | WS4 scoring: ASR + timing | done | agent (session 1) | 2026-10-15 | segments/timing/asr/pipeline; 31 tests; faster-whisper small.en int8 ≈ 8× RT. `timing.json` carries all judge blocks except caption/user words |
 | WS5 judge + calibration | done (payload v2 calibrated) | session 2 | 2026-10-16 | rubrics verbatim, judge (gpt-4o/claude/gemini backends), report w/ bootstrap CIs. Payload v2: GT 4.12 vs random 2.70; results/calibration_v2.md. ≈$0.013/row-axis |
 | WS6 providers: OpenAI RT, Tavus/Anam, gen judge | 6a done; 6b/6c todo (keys needed in .env) | agent (session 1) | 2026-10-15 | openai_realtime provider live-verified (gpt-realtime, -mini; AV via input_image items, 1 fps). Tavus/Anam + generation judge still todo |
-| WS7 NVIDIA adapter | **in progress** (access approved 2026-10-16) | session 2 | 2026-10-16 | loader → Sample; then runs + scoring on the real clips |
+| WS7 NVIDIA adapter + test-split runs | done | session 3 | 2026-10-16 | loader, gt/random, and the 4 API-model configs on all 226 test rows scored + reported: `results/nvidia_test.md`. Generation judge (WS6c) still todo |
 | WS8 report + publish | results tables done; README/publish todo | session 2 | 2026-10-16 | results/v0_summary.md (day-1 rows), results/v0_summary_all.md (all 118 rows) |
 
 ## Decisions log

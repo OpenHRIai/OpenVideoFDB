@@ -24,9 +24,9 @@ evaluation code or official scorer. This repository provides:
 - **A human annotator page** (`ovfdb review`) to check mined clips by eye.
 
 Status (2026-10-16): the pipeline reproduces the paper's human-reference numbers on the
-NVIDIA test split where that is computable, and lands in the paper's range for the two
-API models on the validation split. Model runs on the full NVIDIA test split and the
-generation (video-out) judge are not done yet. See *Results* and *Status* below.
+NVIDIA test split where that is computable, and the two API models land within 0.25
+overall of the project page on the full 226-row test split (both AV2A and A2A). The
+generation (video-out) judge is not done yet. See *Results* and *Status* below.
 
 ## Results
 
@@ -45,15 +45,23 @@ buckets), so the human reference is computable on those 60 rows.
 | Per category: Laughter (P) ours / paper | | | | 3.86 / 3.86 | |
 | Per category: Nonverbal Backchanneling (P) ours / paper | | | | 4.53 / 4.12 | |
 
-**NVIDIA validation split, 11 public rows** (`results/nvidia_validation.md`; n ≤ 5 per cell,
-a pipeline smoke test, not a result):
+**NVIDIA test split, all 226 rows** (`results/nvidia_test.md`; per-dynamic tables and
+bootstrap CIs there). Same clips, windows, captions and ASR as the paper; judge gpt-4o.
 
-| Model | Setting | ours | paper (full test) |
-|---|---|---|---|
-| Gemini 3.1 Flash Live | AV2A | 2.80 | 2.84 |
-| Gemini 3.1 Flash Live | A2A | 2.30 | 3.03 |
-| OpenAI gpt-realtime | AV2A | 2.70 | 2.75 |
-| OpenAI gpt-realtime | A2A | 2.90 | 2.97 |
+| Model | Setting | Fluency | Conv. Flow | Vis. Ground. | Overall | Timing | Paper overall / timing |
+|---|---|---|---|---|---|---|---|
+| Human reference (60 rows) | AV2AV | 4.57 | 4.06 | 3.64 | 4.22 | 100 % / — | 4.20 / 90 % / 1400 ms |
+| Random baseline (mismatched partner) | AV2AV | 1.57 | 2.06 | 2.73 | 2.03 | 53 % / 0 ms | — |
+| Gemini 3.1 Flash Live | AV2A | 2.72 | 3.28 | 3.22 | 3.00 | 57 % / 1192 ms | 2.84 / 66 % / 1720 ms |
+| OpenAI gpt-realtime | AV2A | 2.73 | 2.94 | 3.37 | 3.00 | 56 % / 1412 ms | 2.75 / 72 % / 5400 ms |
+| Gemini 3.1 Flash Live | A2A | 2.93 | 3.41 | 3.22 | 3.13 | 59 % / 1172 ms | 3.03 / 69 % / 1240 ms |
+| OpenAI gpt-realtime | A2A | 2.66 | 2.94 | 3.15 | 2.88 | 60 % / 1108 ms | 2.97 / 67 % / 4440 ms |
+
+The paper's visual-stream-ignorance finding reproduces: AV2A and A2A differ by about 0.1
+overall per model with overlapping CIs. Our Conv. Flow runs higher and Gemini's Fluency
+lower than the paper's; TOR-Alignment is 56–60 % against 66–72 %; our gpt-realtime
+latency is 1.1–1.4 s where the paper reports 4.4–5.4 s (onset definition, see the notes).
+The validation-split smoke test (11 public rows) is in `results/nvidia_validation.md`.
 
 **Open Seamless-derived set, 60 day-1 rows** (`results/v0_summary.md`, manifest v0):
 
