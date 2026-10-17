@@ -12,7 +12,7 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   `score/pipeline.iter_rows`; `report` is unaffected (it reads clip_id from timing.json).
 - 2026-10-15 — `harness/base.py`: `AudioOut` gained `flush: bool = False` (barge-in: drop queued-unplayed audio at `t_received`; maps Gemini `server_content.interrupted`). Providers stamp `t_received` on their own clock (t=0 at first `push_audio`); streamer re-stamps on drain, keeps provider value as `t_agent` in events. (WS3)
 
-## HANDOFF 2026-10-16 (end of session 3) — read this first
+## HANDOFF 2026-10-17 (end of session 3) — read this first
 **v0.1.0 is released** (GitHub `OpenHRIai/OpenVideoFDB` + tag/release, HF dataset `OpenHRI/open-videofdb`).
 Remotes in this checkout: `origin` = susurobo/OpenVideoFDB, `openhri` = OpenHRIai/OpenVideoFDB — **push both**.
 Announcement drafts: `docs/announcement.md`; final example video (not in git): `data/announcement/example_laughter_frisbee.mp4`.
@@ -42,11 +42,31 @@ Re-running: `ovfdb run` is resumable (skips dirs with run.json); a connection dr
 - The NVIDIA licence allows publishing results, forbids redistributing data/derivatives: `runs_nv/`, `data/nvidia/`,
   `manifest/nvidia_*` stay local (all git-ignored). No NVIDIA frames in posts (academic publications only).
 
+### WS6b avatar runs — state (2026-10-16 evening, session 3)
+- Harness: `ovfdb/harness/providers/playwright_avatar.py` + `harness/web/avatar.html` (headless Chrome via Playwright
+  `channel="chrome"`; the clip is the user's camera+mic; remote avatar recorded to `agent.mp4` aligned to clip t=0;
+  AudioWorklet PCM → AudioOut; `run_manifest(bucket=..., partner_video_first=...)`; vendor quota → run aborts).
+  Providers `tavus` (CVI full pipeline, Raven perception sees the user → AV2AV, stock Phoenix-4.5 "Helen - Casual",
+  LLM tavus-gemma-4, persona cached in `.tavus_persona`) and `anam` (audio-only input → A2AV, stock Cara-4 "Mia",
+  Anam-hosted Gemini 3 Flash; `getUserMedia` is overridden in the page so the SDK's mic = the clip — without that
+  Anam never hears the user and monologues "it's been quiet").
+- Runs on the 121 generation rows (human-reference rows first): `runs_nv/tavus_av2av` **done and scored** (see results/nvidia_generation.md notes for run facts);
+  `runs_nv/anam_a2av` stopped at 1 valid row — **Anam usage limit reached** (free 30 min; ~25 of them burnt by the
+  first, invalid run). Resume after upgrading with the same command (resumable; errored dirs already deleted):
+  `uv run python -c "from ovfdb.harness import streamer; streamer.run_manifest('manifest/nvidia_test.jsonl', provider='anam', mode='a2a', out='runs_nv/anam_a2av', concurrency=1, bucket='generation', partner_video_first=True)"`
+- Generation-judge width ablation (2026-10-16, gt 30 rows, gpt-4o): 512 px frames give 4.17 / 3.20 / 2.83 / 3.40 vs
+  256 px 4.17 / 3.30 / 3.00 / 3.49 (paper 4.42 / 4.14 / 3.18 / 3.92) — pane size is not what holds Affect Match down;
+  keep the paper's 256 px. Remaining suspects: no agent-side visual/audio captions in our payload, judge version.
+- Cost model (measured): Tavus bills ≈ clip + 19 s per row, Anam ≈ clip + 5 s; 121 generation rows = 105 clip min →
+  Tavus ≈ 145 min, Anam ≈ 125 min; perception rows would add about the same again. Plans: Tavus Starter $59/100 min
+  + $0.37/min, Growth $397/1250 min; Anam Starter $12/50 min (5 min/session cap) + $0.16/min, Explorer $49/250 min.
+  Generation judge (gpt-4o, 3 axes, ≤500 low-detail frames) ≈ $0.26/row → ≈ $32 per 121-row configuration.
+
 ### Next (priority order)
-1. Generation (video-out) judge (WS6c, protocol §6) — needed for Table 2 and the human-reference generation rows.
+1. Anam A2AV run once the plan has minutes (resume command above), then `score-timing` + `score-generation` + `report` with `runs_nv/anam_a2av` added; optionally the 105 perception rows for Tavus (Table 1 AV2AV row, ≈ 145 more Tavus minutes).
 2. Second judge (claude) for agreement numbers (`report.agreement`; needs ANTHROPIC_API_KEY).
 3. Seamless track items (see below): Verbal Backchanneling decision, laughter bleed fix, top-ups, v1 model runs.
-4. Avatar agents (Tavus / Anam, WS6b) once keys are available.
+4. Tavus/Anam on the Seamless v1 manifest (same harness; CC-BY-NC clips can be shown in posts).
 
 ### Seamless track — state when parked
 - **Manifest v0** (`manifest/ovfdb_v0.jsonl`, 118 rows / 110 clips, day-1 + nonverbal): fully run and judged for
@@ -102,7 +122,7 @@ Re-running: `ovfdb run` is resumable (skips dirs with run.json); a connection dr
 | WS3 harness (Gemini Live) | done | agent (session 1) | 2026-10-15 | streamer/recorder/human_gt/random/gemini_live; live smoke OK on `gemini-3.1-flash-live-preview` (AV + a2a), drift < 40 ms, no errors. `scripts/smoke_gemini_live.py` |
 | WS4 scoring: ASR + timing | done | agent (session 1) | 2026-10-15 | segments/timing/asr/pipeline; 31 tests; faster-whisper small.en int8 ≈ 8× RT. `timing.json` carries all judge blocks except caption/user words |
 | WS5 judge + calibration | done (payload v2 calibrated) | session 2 | 2026-10-16 | rubrics verbatim, judge (gpt-4o/claude/gemini backends), report w/ bootstrap CIs. Payload v2: GT 4.12 vs random 2.70; results/calibration_v2.md. ≈$0.013/row-axis |
-| WS6 providers: OpenAI RT, Tavus/Anam, gen judge | 6a done; 6b/6c todo (keys needed in .env) | agent (session 1) | 2026-10-15 | openai_realtime provider live-verified (gpt-realtime, -mini; AV via input_image items, 1 fps). Tavus/Anam + generation judge still todo |
+| WS6 providers: OpenAI RT, Tavus/Anam, gen judge | 6a, 6c done; 6b done for Tavus (121 gen rows), Anam blocked on plan minutes | session 3 (+ agent for 6c) | 2026-10-17 | `results/nvidia_generation.md`: gt 4.17/3.30/3.00/3.49 (paper 3.92), random 1.63, **Tavus CVI 3.79/2.30/1.65/2.63**, TOR 31 %/1956 ms. Judge: `score-generation` (gpt-4o vision, F.6 rubrics verbatim, ≈$0.26/row). Harness: `playwright_avatar.py` + `web/avatar.html`. Anam: 1 valid row, free minutes exhausted — resume command in the WS6b section |
 | WS7 NVIDIA adapter + test-split runs | done | session 3 | 2026-10-16 | loader, gt/random, and the 4 API-model configs on all 226 test rows scored + reported: `results/nvidia_test.md`. Generation judge (WS6c) still todo |
 | WS8 report + publish | results tables done; README/publish todo | session 2 | 2026-10-16 | results/v0_summary.md (day-1 rows), results/v0_summary_all.md (all 118 rows) |
 

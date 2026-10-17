@@ -179,6 +179,22 @@ Per-category decomposed schema:
 Consistency rules: cue_produced=0 ⇒ timing=absent, appropriateness=0;
 "during" = onset within [ds, de] or within 500 ms of ds.
 
+OpenVideoFDB implementation (`judge_generation.py`, `ovfdb score-generation`, WS6c): the
+composite is built with ffmpeg from `user_video_path` and the agent video (run.json
+`agent_video_path`, else the human partner's video for `human_gt`, else the random partner's
+mp4 for `random`), labels burned in with PIL, user wav L / agent wav R; frames at 8 fps,
+≤600, 256 px wide (`--fps/--max-frames/--width`), cached under `<row>/gen/`. Text block
+(`build_user_text`) follows the F.1 generation example: framing note, category, window, clip
+duration, `+ Annotated cue`, USER STIMULUS (full-clip AV caption + timestamped user speech),
+AGENT OUTPUT (audio-side ground truth: in/pre/post-window agent audio; agent–user overlap over
+substantive user turns with >1 s / >1.5 s / >4 s event counts; agent visual and audio captions
+`[not available]`; segments; `+` timestamped agent speech with wordless VAD spans marked;
+transcript). System = `generation_preamble` + axis rubric + schema reminder (decomposed schema +
+F.3 rules for the category axis). Reported per row: `affect_match`, `generation_fluency`,
+`cue_appropriateness` (= project page "NV Cue Approp."); Overall = mean of the available axes.
+Results: `<row>/judge.json`, `<run>/judge_summary_generation.json`; `ovfdb report` adds a
+Generation table (Fluency, Dyadic Affect, NV Cue Approp., Overall, Timing).
+
 ## 7. Agent-side system prompt (F.4)
 For clips where the agent must already be speaking (`agent_speaks_first`), build
 a prompt from the transcript of both channels **up to the event window only**
@@ -213,6 +229,15 @@ Ground). Reproduce this before trusting any model score.
   pads a "yeah" to 1.04 s) and 50 % on Turn-taking (word onsets 80–370 ms after
   the end of our 0.3–1.3 s handoff windows), far below the paper's ≈78 % GT.
 - Mining is rule-based + VLM-verified with spot checks, not a 3-pass human pipeline.
+- Generation judge (§6): no Qwen-3.5 visual caption or Nemotron-Omni audio caption of the
+  agent output — those payload lines say `[not available]` and the judge reads the AGENT pane
+  of the frames directly (wordless VAD spans in the agent segments stand in for the audio
+  caption's laugh/backchannel detection). The user-side caption is the full-clip AV caption,
+  not one cut at dynamic_start_s. The frames carry no audio. When 8 fps exceeds the frame cap
+  the frames are spread uniformly over the clip (effective fps = cap / duration); the OpenAI
+  API refuses >500 images per request, so gpt-4o sees ≤500 frames (clips ≥62.5 s are sampled
+  below 8 fps), Claude ≤100. Human-reference / random generation rows exist only where the
+  partner video ships (NVIDIA test split: the 30 Laughter + Nonverbal Backchanneling rows).
 - **Manifest v0 (`manifest/ovfdb_v0.jsonl`)**: day-1 dynamic windows were mined with rules that condition
   on the partner's behaviour (partner silent through the pause, partner stops ≤ 1.5 s, handoff window ends at
   the partner's onset, window built around the partner's backchannel), so the human reference passes the

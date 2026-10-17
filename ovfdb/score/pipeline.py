@@ -22,12 +22,23 @@ from __future__ import annotations
 
 import json
 import logging
+import subprocess
 from dataclasses import asdict
 from functools import lru_cache
 from pathlib import Path
 from statistics import mean, stdev
 
-from ovfdb.schema import AgentRole, AgentRun, Axis, Bucket, Sample, TimingClass, read_manifest, run_dir_names
+from ovfdb.schema import (
+    AgentRole,
+    AgentRun,
+    Axis,
+    Bucket,
+    DynamicType,
+    Sample,
+    TimingClass,
+    read_manifest,
+    run_dir_names,
+)
 from ovfdb.score import asr, vad
 from ovfdb.score import judge as judge_mod
 from ovfdb.score.segments import format_partition, merge_vad_and_words, partition, words_to_segments
@@ -344,4 +355,184 @@ def score(run_dir: str | Path, judge: str = judge_mod.DEFAULT_JUDGE, axes: str =
     }
     (run_dir / "judge_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2))
     log.info("judged %d/%d rows with %s; overall %s", len(rows_out), summary["n_rows"], judge, summary["overall"])
+    return summary
+
+
+# --- generation (WS6c) -----------------------------------------------------------------------
+
+def _gen_judge_payload(sample: Sample, run: AgentRun, judge: str, results: dict, frames: dict,
+                       existing: dict | None) -> dict:
+    """judge.json for a generation row: this judge's generation axes at top level (merged into any axes the
+    same judge already wrote for the row), every judge so far under `by_judge`."""
+    from ovfdb.score import judge_generation as gen_mod
+
+    axes = {a: {"rating": r.rating, "analysis": r.analysis, "reasoning": r.reasoning, "rubric": r.rubric,
+                "cached": r.cached, "usage": r.usage, "cue_produced": r.cue_produced, "cue_timing": r.cue_timing,
+                "consistency_fixes": r.consistency_fixes, "n_frames": r.n_frames} for a, r in results.items()}
+    prev = {}
+    if existing and existing.get("judge") == judge:
+        prev = dict(existing.get("axes") or {})
+    elif existing:
+        prev = dict(((existing.get("by_judge") or {}).get(judge) or {}).get("axes") or {})
+    prev.update(axes)
+    axes = prev
+    overall = mean(v["rating"] for v in axes.values()) if axes else None
+    block = {"judge": judge, "payload_version": gen_mod.PAYLOAD_VERSION, "axes": axes, "overall": overall,
+             "skipped_axes": [a.value for a in sample.axes if a.value not in axes],
+             "frames": {k: frames.get(k) for k in ("n", "fps", "width", "source", "agent_video", "composite")}}
+    by_judge = dict((existing or {}).get("by_judge") or {})
+    by_judge[judge] = block
+    return {
+        "clip_id": sample.clip_id, "provider": run.provider, "mode": run.mode, "bucket": sample.bucket.value,
+        "dynamic_type": sample.dynamic_type.value, "agent_role": sample.agent_role.value,
+        "has_caption": bool((sample.av_caption or "").strip()),
+        **block, "by_judge": by_judge,
+    }
+
+
+def _has_generation_axes(existing: dict | None, judge: str, wanted: list[Axis]) -> bool:
+    if not existing:
+        return False
+    block = existing if existing.get("judge") == judge else ((existing.get("by_judge") or {}).get(judge) or {})
+    axes = block.get("axes") or {}
+    return bool(wanted) and all(a.value in axes for a in wanted)
+
+
+def score_generation(run_dir: str | Path, judge: str = judge_mod.DEFAULT_JUDGE, axes: str = "all",
+                     manifest: str | None = None, *, force: bool = False, fps: float | None = None,
+                     max_frames: int | None = None, width: int | None = None, limit: int = 0,
+                     dry_run: bool = False, rebuild_frames: bool = False, dynamics: str | None = None) -> dict:
+    """WS6c: generation (video-out) judge over every generation row of `run_dir` that has an agent video.
+
+    Reuses `<bucket>/timing.json` (`score_timing` fills any that are missing). Per row: side-by-side
+    composite + sampled frames cached under `<row>/gen/` (`fps`, `max_frames`, `width` default to the
+    paper's 8 / 600 / 256), one vision-judge call per axis (cache `<row>/judge/<axis>_<judge>.json`),
+    `judge.json` written next to timing.json. Rows whose judge.json already has every wanted generation
+    axis from this judge are skipped unless `force` (which also re-judges cached axes; `rebuild_frames`
+    re-encodes the media). `dry_run` builds the media and prints the text payload without calling the
+    judge. `dynamics` (comma list of dynamic types) restricts the rows, e.g. to the dynamics whose human
+    reference exists. Writes `<run_dir>/judge_summary_generation.json` (the perception summary is left alone).
+    """
+    from ovfdb.score import judge_generation as gen_mod
+
+    run_dir = Path(run_dir)
+    manifest = _resolve_manifest(run_dir, manifest)
+    timing_summary = score_timing(run_dir, manifest=manifest)
+    manifest = timing_summary["manifest"]
+    wanted = _parse_axes(axes)
+    fps = gen_mod.FPS if fps is None else fps
+    max_frames = gen_mod.MAX_FRAMES if max_frames is None else max_frames
+    width = gen_mod.FRAME_WIDTH if width is None else width
+    rows_out: list[dict] = []
+    skipped: list[dict] = []
+    usage = {"prompt_tokens": 0, "completion_tokens": 0, "n_calls": 0, "n_cached": 0}
+    rows, _ = iter_rows(run_dir, manifest)
+    only = {DynamicType(d.strip()) for d in str(dynamics).split(",") if d.strip()} if dynamics else None
+    rows = [r for r in rows if r[0].bucket is Bucket.GENERATION and (only is None or r[0].dynamic_type in only)]
+    n_done = 0
+    for sample, clip_dir, run in rows:
+        out_dir = row_dir(clip_dir, sample.bucket)
+        tpath = out_dir / "timing.json"
+        if not tpath.exists():
+            skipped.append({"clip_id": sample.clip_id, "bucket": sample.bucket.value, "reason": "no timing.json"})
+            continue
+        sel = [a for a in sample.axes if a in gen_mod.GENERATION_AXES and (wanted is None or a in wanted)]
+        jpath = out_dir / "judge.json"
+        existing = json.loads(jpath.read_text()) if jpath.exists() else None
+        if not force and not dry_run and _has_generation_axes(existing, judge, sel):
+            payload = existing if existing.get("judge") == judge else None
+            if payload is None:                      # another judge is at top level: read ours from by_judge
+                block = (existing.get("by_judge") or {})[judge]
+                payload = {**existing, **block}
+            payload["_reused"] = True
+            rows_out.append(payload)
+            usage["n_cached"] += len(sel)
+            continue
+        if limit and n_done >= limit:
+            break
+        try:
+            frames = gen_mod.prepare_frames(sample, run, clip_dir, out_dir / "gen", fps=fps, max_frames=max_frames,
+                                            width=width, force=rebuild_frames)
+        except gen_mod.GenerationJudgeError as e:
+            log.warning("%s/generation: skipped (%s)", sample.clip_id, e)
+            skipped.append({"clip_id": sample.clip_id, "bucket": sample.bucket.value, "reason": str(e)})
+            continue
+        except subprocess.CalledProcessError as e:
+            msg = (e.stderr or "").strip().splitlines()[-1:] or [str(e)]
+            log.warning("%s/generation: ffmpeg failed (%s)", sample.clip_id, msg[0])
+            skipped.append({"clip_id": sample.clip_id, "bucket": sample.bucket.value, "reason": f"ffmpeg: {msg[0]}"})
+            continue
+        timing_json = json.loads(tpath.read_text())
+        n_done += 1
+        if dry_run:
+            text = gen_mod.build_user_text(sample, timing_json, frames)
+            print(f"--- {sample.clip_id}/generation ({sample.dynamic_type.value}): {frames['n']} frames @ "
+                  f"{frames['fps']:.2f} fps, {frames['width']} px wide, agent video = {frames['source']}\n{text}\n")
+            rows_out.append({"clip_id": sample.clip_id, "bucket": "generation", "dynamic_type": sample.dynamic_type.value,
+                             "axes": {}, "overall": None, "frames": frames, "dry_run": True})
+            continue
+        results = gen_mod.score_sample(sample, timing_json, frames, judge, axes=sel, cache_dir=out_dir / "judge",
+                                       force=force)
+        for r in results.values():
+            if r.cached:
+                usage["n_cached"] += 1
+            else:
+                for k in ("prompt_tokens", "completion_tokens", "n_calls"):
+                    usage[k] += int(r.usage.get(k, 0) or 0)
+        payload = _gen_judge_payload(sample, run, judge, results, frames, existing)
+        jpath.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+        rows_out.append(payload)
+        row_usage = {k: sum(int(r.usage.get(k, 0) or 0) for r in results.values()) for k in ("prompt_tokens", "completion_tokens")}
+        log.info("%s/generation %s: %s (frames %d, tokens in %d / out %d, ~$%.3f)", sample.clip_id,
+                 sample.dynamic_type.value, {a: r.rating for a, r in results.items()}, frames["n"],
+                 row_usage["prompt_tokens"], row_usage["completion_tokens"],
+                 gen_mod.estimate_cost_usd(row_usage, judge) or 0.0)
+
+    judged = [c for c in rows_out if c.get("axes")]
+    axis_names = sorted({a for c in judged for a in c["axes"]})
+    per_dynamic: dict[str, dict] = {}
+    for dyn in sorted({c["dynamic_type"] for c in judged}):
+        cs = [c for c in judged if c["dynamic_type"] == dyn]
+        per_dynamic[dyn] = {a: _stats([c["axes"][a]["rating"] for c in cs if a in c["axes"]]) for a in axis_names
+                            if any(a in c["axes"] for c in cs)}
+        per_dynamic[dyn]["overall"] = _stats([c["overall"] for c in cs if c["overall"] is not None])
+    cue = [c["axes"][Axis.CUE_APPROPRIATENESS.value] for c in judged if Axis.CUE_APPROPRIATENESS.value in c["axes"]]
+    cost = gen_mod.estimate_cost_usd(usage, judge)
+    n_fresh = sum(1 for c in judged if not c.get("_reused") and any(not v.get("cached") for v in c["axes"].values()))
+    summary = {
+        "run_dir": str(run_dir),
+        "judge": judge,
+        "payload_version": gen_mod.PAYLOAD_VERSION,
+        "manifest": manifest,
+        "frames": {"fps": fps, "max_frames": max_frames, "width": width},
+        "dynamics": sorted(d.value for d in only) if only else None,
+        "n_generation_rows": len(rows),
+        "n_judged": len(judged),
+        "skipped": skipped,
+        "per_axis": {a: _stats([c["axes"][a]["rating"] for c in judged if a in c["axes"]]) for a in axis_names},
+        "overall": _stats([c["overall"] for c in judged if c["overall"] is not None]),
+        "cue": {
+            "n": len(cue),
+            "produced_rate": (sum(1 for v in cue if v.get("cue_produced")) / len(cue)) if cue else None,
+            "timing": {t: sum(1 for v in cue if v.get("cue_timing") == t) for t in gen_mod.TIMING_VALUES},
+            "n_consistency_fixes": sum(1 for v in cue if v.get("consistency_fixes")),
+        },
+        "per_dynamic": per_dynamic,
+        "usage": {**usage, "est_cost_usd": cost, "n_fresh_rows": n_fresh,
+                  "est_cost_per_fresh_row_usd": (cost / n_fresh) if (cost is not None and n_fresh) else None},
+        "timing": timing_summary.get("aggregate", {}),
+        "rows": [{"clip_id": c["clip_id"], "bucket": c["bucket"], "dynamic_type": c["dynamic_type"],
+                  "overall": c["overall"], "axes": {a: v["rating"] for a, v in c["axes"].items()},
+                  "cue_produced": (c["axes"].get(Axis.CUE_APPROPRIATENESS.value) or {}).get("cue_produced"),
+                  "cue_timing": (c["axes"].get(Axis.CUE_APPROPRIATENESS.value) or {}).get("cue_timing"),
+                  "n_frames": next((v.get("n_frames") for v in c["axes"].values() if v.get("n_frames")),
+                                   (c.get("frames") or {}).get("n")),
+                  "usage": {k: sum(int((v.get("usage") or {}).get(k, 0) or 0) for v in c["axes"].values())
+                            for k in ("prompt_tokens", "completion_tokens")}}
+                 for c in rows_out],
+    }
+    if not dry_run:
+        (run_dir / "judge_summary_generation.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2))
+    log.info("generation: judged %d/%d rows with %s; overall %s; skipped %d", len(judged),
+             summary["n_generation_rows"], judge, summary["overall"], len(skipped))
     return summary

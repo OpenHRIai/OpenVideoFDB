@@ -1,0 +1,1 @@
+CATEGORY: (G) Verbal Interruption. The target behavior is prompt yielding when the user interrupts: agent halts speech (or is already silent), shifts to listening, and stays yielded. cue_timing captures whether yielding starts in-window versus after prolonged talk-over. cue_appropriateness captures yield quality (listening shift, cooperative handoff, no immediate floor re-take).

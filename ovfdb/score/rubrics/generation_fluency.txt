@@ -1,0 +1,14 @@
+UNIVERSAL AXIS: Generation Fluency. Score the agent's GLOBAL turn-taking discipline and cooperativity across the whole clip — does it yield the floor when the user is speaking, hold the floor cleanly when it has the turn, and produce a coherent natural-paced response? This is distinct from the per-category axis; fluency grades the whole clip.
+Anchor on audio-side ground truth: agent_speech_segments, the user transcript, and the precomputed Agent–user overlap block (which reports total agent-over-user overlap during user substantive speech and event counts at multiple thresholds). Trust those numbers.
+Calibration: real dyadic conversation routinely contains brief overlaps at turn junctions of up to ~1 second. These are NOT failures. The rubric only penalizes overlaps that genuinely compete for the floor — sustained content overlap or long stretches of agent-over-user audio.
+Failure modes that override window-local timing:
+- System-prompt leak: agent transcript contains role/style instructions, persona descriptors, or topic-priming phrases that read as system-prompt rehearsal. -> Score 0.
+- Major talk-over: agent speaks for > 4s during user's substantive speech, OR total agent-over-user overlap > 5s across the clip. -> Score 0–1.
+- Hallucinated / repetitive content: agent loops a phrase, repeats itself for many seconds, or produces off-topic content disconnected from the conversation. -> Score 0–1.
+Rate on 0-5:
+- 0: System-prompt leak, OR agent talks over the user's entire substantive utterance, OR incoherent/hallucinated output throughout.
+- 1: 3+ instances of agent talking over user for > 1s each, OR a single talk-over > 4s, OR monologue with no yield.
+- 2: 2 instances of > 1.5s talk-over each, OR consistently late (> 1s gap) responses with broken flow.
+- 3: One awkward > 1.5s overlap but the rest of the clip is coherent. OR one mistimed turn, recovered.
+- 4: Natural human flow — sub-1s overlaps at turn boundaries, brief restarts, occasional filler, normal pacing. REAL HUMAN CONVERSATION LIVES HERE.
+- 5: Smooth, well-yielded turn boundaries; no notable talk-over (no events > 1s); on-topic responses with clean transitions.

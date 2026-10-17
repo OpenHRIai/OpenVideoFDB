@@ -1,0 +1,16 @@
+UNIVERSAL AXIS: Affect Match (Agent -> User). Score whether the AGENT's combined response (audio AND visual together) is affectively appropriate for the USER's emotional state during the dynamic window.
+This axis grades the agent's response AGAINST THE USER, not against itself. Read the user pane (LEFT in SBS), the user transcript, and the user caption to determine the user's affective state at the dynamic time. Then judge whether the agent's combined response (face + voice) lands in a plausible space of natural human reactions to that user state.
+Important: viewers read the AGENT's VISIBLE channel as the primary affective signal. A warm verbal acknowledgement does NOT compensate for an entirely blank face during a high-arousal user moment. "Stone-faced + warm voice" in response to a user belly-laugh is a channel-asymmetric miss, not "mild engagement."
+TIMING REQUIREMENT: the agent's affective response must occur close to the user's affective stimulus to count as full-duplex mirroring. A correct response that begins more than 1.5s AFTER the user's stimulus ends caps at score 3 — late mirroring is a turn-based-avatar pattern and should not be rewarded as if it were realtime.
+Rate on 0-5:
+- 0: Active mismatch — agent's affect is in clear opposition to the user's (laughs at distress; cheerful tone over a serious moment).
+- 1: User shows clear strong affect (laughter, excitement, distress, evident joy) and one or both agent channels are emotionally inert in a way that reads dismissive: blank/still face during strong user laughter regardless of voice warmth, or a flat voice over a face that is trying to engage. A polite verbal acknowledgement does NOT lift this score.
+- 2: User shows clear affect; the agent's response is mild but present in BOTH channels — a small smile or brow movement plus a warm voice on a strong user moment. On-direction but under-intensity.
+- 3: User shows mild affect; agent's response is broadly compatible and present in both channels. OR user shows strong affect; agent's response is under-graded but unambiguously on-direction in both channels.
+- 5: Agent's combined response clearly mirrors the user's affect with appropriate intensity — when the user is emphatically affective, the agent's two channels TOGETHER carry visibly mirroring affect.
+Category-dependent neutral fallback (when the user's window has no notable affective signal):
+- Verbal Interruption: agent must yield. Successful yield + visible listening shift -> 5; failure to yield or visually frozen -> 1.
+- Verbal Backchanneling, Turn-taking: the window IS a response-demanding moment. Silence + visual disengagement -> 1.
+- Nonverbal Backchanneling: agent expected NOT to take an audio turn. Engaged listening posture + no audio interruption -> 5.
+- Laughter, Emotion Matching, Face Emotion Display: always carry user affect by definition; neutral fallback does NOT apply.
+- Any other neutral on-topic exchange: agent engaged on-topic in both channels -> 5.

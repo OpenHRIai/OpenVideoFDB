@@ -1,0 +1,1 @@
+CATEGORY: (G) Verbal Backchanneling. Uses the same unified backchannel rubric as Nonverbal Backchanneling: either modality can satisfy cue_produced when it functions as listener acknowledgement. Audio-side transcript and segment timing are authoritative for short verbal acks. cue_appropriateness penalizes using the backchannel as turn-launch (long continuation after initial ack).

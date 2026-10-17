@@ -15,6 +15,7 @@ Spec: plans/WS3-harness.md.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime as dt
 import io
 import json
@@ -130,14 +131,21 @@ async def stream_sample(sample: Sample, agent: Agent, mode: Mode, fps: float = D
         errors.append(f"no video at {sample.user_video_path!r}; ran without frames")
 
     rec.log("start", 0.0, mode=mode, provider=agent.name, clip_s=round(clip_s, 3), n_frames=len(frames))
+    if out_dir is not None and hasattr(agent, "set_out_dir"):
+        agent.set_out_dir(out_dir)          # avatar providers write agent.mp4 themselves
     try:
         await agent.start(sample.system_prompt, mode, agent_speaks_first=sample.agent_speaks_first)
     except Exception as e:
+        if type(e).__name__ == "VendorQuotaError":
+            with contextlib.suppress(Exception):
+                await agent.stop()
+            raise                                   # run_manifest stops; no run.json for this row
         errors.append(f"start: {e!r}")
         log.exception("agent.start failed for %s", sample.clip_id)
         return _finish(sample, agent, mode, rec, clip_s + tail_s, started_at, 0.0, errors, out_dir, dict(extra_meta or {}))
 
     t0 = time.monotonic()
+    trust_s = float(getattr(agent, "trust_stamp_s", TRUST_AGENT_STAMP_S))
     stop_drain = asyncio.Event()
 
     async def drain() -> None:
@@ -154,7 +162,8 @@ async def stream_sample(sample: Sample, agent: Agent, mode: Mode, fps: float = D
             # parsed, i.e. never later than the drain time; trust it when the two clocks agree,
             # so an event-loop stall cannot shift a recorded onset.
             t_agent = item.t_received
-            t = t_agent if 0.0 <= t_drain - t_agent <= TRUST_AGENT_STAMP_S else t_drain
+            # avatar providers stamp on the page clock (= clip clock): trust it even if this loop stalls
+            t = t_agent if 0.0 <= t_drain - t_agent <= trust_s else t_drain
             if item.flush:
                 rec.flush(t)
             elif item.pcm16k:
@@ -229,6 +238,7 @@ def _finish(sample: Sample, agent: Agent, mode: Mode, rec: Recorder, duration_s:
         wav, ev = rec.write(out_dir / "agent.wav", duration_s=duration_s)
         wav_path, ev_path = str(wav), str(ev)
     run = AgentRun(clip_id=sample.clip_id, provider=agent.name, mode=mode, agent_audio_path=wav_path,
+                   agent_video_path=getattr(agent, "agent_video_path", None),
                    model=getattr(agent, "model", ""), started_at=started_at, drift_ms=round(drift_ms, 2),
                    events_path=ev_path, errors=errors, meta=meta)
     if out_dir is not None:
@@ -260,7 +270,19 @@ def _make_random(sample: Sample, samples: list[Sample], model: str) -> Agent:
 
 
 #: provider name → factory(sample, all_samples, model) -> Agent (one agent per clip).
+def _make_tavus(sample: Sample, samples: list[Sample], model: str) -> Agent:
+    from ovfdb.harness.providers.playwright_avatar import PlaywrightAvatar
+    return PlaywrightAvatar("tavus", sample, model)
+
+
+def _make_anam(sample: Sample, samples: list[Sample], model: str) -> Agent:
+    from ovfdb.harness.providers.playwright_avatar import PlaywrightAvatar
+    return PlaywrightAvatar("anam", sample, model)
+
+
 PROVIDERS: dict[str, Callable[[Sample, list[Sample], str], Agent]] = {
+    "tavus": _make_tavus,
+    "anam": _make_anam,
     "gemini_live": _make_gemini,
     "openai_realtime": _make_openai_realtime,
     "human_gt": _make_human_gt,
@@ -270,11 +292,13 @@ PROVIDERS: dict[str, Callable[[Sample, list[Sample], str], Agent]] = {
 
 def run_manifest(manifest: str | Path, provider: str, mode: str = "av", out: str | Path = "",
                  limit: int = 0, concurrency: int = 1, model: str = "", tail_s: float = DEFAULT_TAIL_S,
-                 fps: float = DEFAULT_FRAME_FPS) -> list[AgentRun]:
+                 fps: float = DEFAULT_FRAME_FPS, bucket: str = "", partner_video_first: bool = False) -> list[AgentRun]:
     """Stream every clip of `manifest` through `provider`; write runs/<out>/<clip_id>/{agent.wav,run.json,events.jsonl}.
 
     Clips whose run.json already exists are skipped (resumable). `model` is passed to the
-    provider (Gemini model id; seed for `random`).
+    provider (Gemini model id; seed for `random`). `bucket` restricts to rows of that bucket and
+    `partner_video_first` runs rows with a human-reference video first (both keep the full
+    manifest's run-dir naming so scoring with the same manifest finds the dirs).
     """
     if provider not in PROVIDERS:
         raise ValueError(f"unknown provider {provider!r}; known: {sorted(PROVIDERS)}")
@@ -284,7 +308,10 @@ def run_manifest(manifest: str | Path, provider: str, mode: str = "av", out: str
     out_dir_root = Path(out or f"runs/{provider}_{mode}")
     out_dir_root.mkdir(parents=True, exist_ok=True)
     (out_dir_root / "manifest.jsonl").write_text(Path(manifest).read_text(encoding="utf-8"), encoding="utf-8")
-    todo = samples[:limit] if limit else samples
+    todo = [s for s in samples if not bucket or s.bucket.value == bucket]
+    if partner_video_first:
+        todo.sort(key=lambda s: 0 if s.partner_video_path else 1)
+    todo = todo[:limit] if limit else todo
     out_dir = Path(out or f"runs/{provider}_{mode}")
     out_dir.mkdir(parents=True, exist_ok=True)
     factory = PROVIDERS[provider]
@@ -294,16 +321,27 @@ def run_manifest(manifest: str | Path, provider: str, mode: str = "av", out: str
         sem = asyncio.Semaphore(max(1, concurrency))
         results: list[AgentRun] = []
 
+        abort: list[str] = []
+
         async def one(s: Sample) -> None:
             clip_dir = out_dir / dir_names[(s.clip_id, s.bucket.value)]
             if (clip_dir / "run.json").exists():
                 log.info("skip %s (run.json exists)", clip_dir.name)
                 return
             async with sem:
+                if abort:
+                    return
                 agent = factory(s, samples, model)
                 log.info("run %s via %s", s.clip_id, agent.name)
-                run = await stream_sample(s, agent, mode, fps=fps, tail_s=tail_s, out_dir=clip_dir,
-                                          extra_meta={"manifest": str(manifest)})
+                try:
+                    run = await stream_sample(s, agent, mode, fps=fps, tail_s=tail_s, out_dir=clip_dir,
+                                              extra_meta={"manifest": str(manifest)})
+                except Exception as e:
+                    if type(e).__name__ == "VendorQuotaError":
+                        abort.append(str(e))
+                        log.error("VENDOR QUOTA: %s — stopping after %d run(s)", e, len(results))
+                        return
+                    raise
                 if run.errors:
                     log.warning("%s: %d error(s): %s", s.clip_id, len(run.errors), run.errors[:2])
                 results.append(run)

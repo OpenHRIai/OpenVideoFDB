@@ -154,6 +154,31 @@ def score(run_dir: str, judge: str = "gpt-4o", axes: str = "all", manifest: str 
     pipeline.score(run_dir, judge=judge, axes=axes, manifest=manifest or None, force=force)
 
 
+@app.command("score-generation")
+def score_generation(run_dir: str, judge: str = "gpt-4o", axes: str = "all", manifest: str = "", force: bool = False,
+                     fps: float = 8.0, max_frames: int = 600, width: int = 256, limit: int = 0,
+                     dry_run: bool = False, rebuild_frames: bool = False, dynamics: str = ""):
+    """WS6c: vision judge on the generation rows that have an agent video (SBS composite frames + text block).
+
+    Defaults follow the paper (8 fps, <= 600 frames, 256 px wide). --limit N judges at most N new rows;
+    --dry-run builds the media and prints the text payload without calling the judge; --force re-judges
+    rows already scored; --rebuild-frames re-encodes <row>/gen/; --dynamics "Laughter,Nonverbal Backchanneling"
+    restricts the rows. Writes judge_summary_generation.json.
+    """
+    import logging
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    from ovfdb.score import pipeline  # WS6c
+    s = pipeline.score_generation(run_dir, judge=judge, axes=axes, manifest=manifest or None, force=force, fps=fps,
+                                  max_frames=max_frames, width=width, limit=limit, dry_run=dry_run,
+                                  rebuild_frames=rebuild_frames, dynamics=dynamics or None)
+    u = s["usage"]
+    typer.echo(f"generation rows judged {s['n_judged']}/{s['n_generation_rows']} (skipped {len(s['skipped'])}); "
+               f"overall {s['overall']}; per_axis {{{', '.join(f'{a}: {v['mean']:.2f}' for a, v in s['per_axis'].items() if v['mean'] is not None)}}}; "
+               f"tokens in {u['prompt_tokens']} / out {u['completion_tokens']} over {u['n_calls']} calls "
+               f"(~${u['est_cost_usd'] or 0:.2f}, ~${u['est_cost_per_fresh_row_usd'] or 0:.3f} per fresh row)")
+
+
 @app.command()
 def review(manifest: str = "manifest/ovfdb_v1.jsonl", port: int = 8765, review_file: str = "",
            no_browser: bool = False):

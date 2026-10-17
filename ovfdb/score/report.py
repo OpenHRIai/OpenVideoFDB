@@ -34,6 +34,27 @@ AXIS_COLUMNS: list[tuple[str, str]] = [
 METRIC_COLUMNS = [label for _, label in AXIS_COLUMNS] + ["Overall", "TOR-Align %", "Latency ms"]
 #: Paper-style columns: the three axes + Overall, then one "Timing" cell = "TOR-Align % / median latency ms".
 PAPER_COLUMNS = [label for _, label in AXIS_COLUMNS] + ["Overall", "Timing"]
+#: Generation bucket (project page Table 2): Fluency, Dyadic Affect (= Affect Match), NV Cue Approp.
+#: (= cue_appropriateness of the per-category decomposed rubric), Overall, Timing.
+GEN_AXIS_COLUMNS: list[tuple[str, str]] = [
+    (Axis.GEN_FLUENCY.value, "Fluency"),
+    (Axis.AFFECT_MATCH.value, "Dyadic Affect"),
+    (Axis.CUE_APPROPRIATENESS.value, "NV Cue Approp."),
+]
+GEN_METRIC_COLUMNS = [label for _, label in GEN_AXIS_COLUMNS] + ["Overall", "TOR-Align %", "Latency ms"]
+GEN_PAPER_COLUMNS = [label for _, label in GEN_AXIS_COLUMNS] + ["Overall", "Timing"]
+
+
+def axis_columns_for(bucket: str | None) -> list[tuple[str, str]]:
+    return GEN_AXIS_COLUMNS if bucket == Bucket.GENERATION.value else AXIS_COLUMNS
+
+
+def metric_columns_for(bucket: str | None) -> list[str]:
+    return GEN_METRIC_COLUMNS if bucket == Bucket.GENERATION.value else METRIC_COLUMNS
+
+
+def paper_columns_for(bucket: str | None) -> list[str]:
+    return GEN_PAPER_COLUMNS if bucket == Bucket.GENERATION.value else PAPER_COLUMNS
 
 # --- naming (paper notation) -----------------------------------------------------------
 #: Display name per (provider, model) as the project page spells it; fallback "<provider> <model>".
@@ -46,19 +67,21 @@ MODEL_NAMES: dict[tuple[str, str], str] = {
     ("openai_realtime", "gpt-realtime"): "OpenAI gpt-realtime",
     ("openai_realtime", "gpt-realtime-mini"): "OpenAI gpt-realtime-mini",
     ("tavus", ""): "Tavus Griffin Lite",
-    ("anam", ""): "Gemini 2.5 + Anam",
+    ("tavus_cvi", ""): "Tavus CVI (Phoenix-4.5, tavus-gemma-4)",
+    ("anam", ""): "Anam (Cara-4, Gemini 3 Flash)",
 }
 #: What the agent emits: "A" (audio only) or "AV" (audio + video). The human partner and the
-#: mismatched-partner baseline are real people on camera, so AV.
+#: mismatched-partner baseline are real people on camera, so AV. `tavus_cvi` runs with --mode av
+#: (AV2AV, full-duplex avatar); `anam` with --mode a2a (A2AV, cascaded speech-to-avatar).
 OUTPUT_MODALITY: dict[str, str] = {
     "human_gt": "AV", "random": "AV", "gemini_live": "A", "openai_realtime": "A",
-    "tavus": "AV", "anam": "AV", "keyframe": "AV",
+    "tavus": "AV", "tavus_cvi": "AV", "anam": "AV", "keyframe": "AV",
 }
 #: Row-group order and headers as on the project page (Tables 1 and 2).
 SETTING_GROUPS: list[tuple[str, str]] = [
     ("REF", "Human reference"),
     ("RANDOM", "Random baseline"),
-    ("AV2AV", "Full-duplex AV2AV models"),
+    ("AV2AV", "Full-duplex AV2AV avatars"),
     ("AV2A", "Full-duplex speech-vision (AV2A)"),
     ("A2A", "Audio-only baselines (A2A; same agents, video withheld)"),
     ("A2AV", "Cascaded speech-to-avatar (A2AV)"),
@@ -214,15 +237,25 @@ def _point(values: list[float], fn=np.mean) -> float:
     return float(fn(v)) if v else math.nan
 
 
-def _metrics(clips: list[dict], *, n_boot: int, seed: int) -> dict:
-    """Point estimates + CIs for one group of clips (a run or a run × dynamic)."""
+def _metrics(clips: list[dict], *, n_boot: int, seed: int,
+             axis_columns: list[tuple[str, str]] = AXIS_COLUMNS) -> dict:
+    """Point estimates + CIs for one group of clips (a run or a run × dynamic).
+
+    Overall = mean over the rows that carry at least one of `axis_columns` of each row's mean over those
+    axes, so a run whose rows span both buckets gets a perception Overall and a generation Overall.
+    """
     row: dict = {"n": len(clips)}
-    for axis, label in AXIS_COLUMNS:
+    for axis, label in axis_columns:
         vals = [c["axes"][axis] for c in clips if axis in c["axes"]]
         row[label] = _point(vals)
         row[f"{label}_lo"], row[f"{label}_hi"] = bootstrap_ci(vals, n_boot=n_boot, seed=seed)
         row[f"{label}_n"] = len(vals)
-    ov = [c["overall"] for c in clips if c["overall"] is not None]
+    keys = [a for a, _ in axis_columns]
+    ov = []
+    for c in clips:
+        vals = [c["axes"][a] for a in keys if a in c["axes"]]
+        if vals:
+            ov.append(sum(vals) / len(vals))
     row["Overall"] = _point(ov)
     row["Overall_lo"], row["Overall_hi"] = bootstrap_ci(ov, n_boot=n_boot, seed=seed)
     row["Overall_n"] = len(ov)
@@ -239,17 +272,37 @@ def _metrics(clips: list[dict], *, n_boot: int, seed: int) -> dict:
 
 # --- public tables ---------------------------------------------------------------------
 
+def _bucket_clips(clips: list[dict], bucket: str | None) -> list[dict]:
+    return clips if bucket is None else [c for c in clips if c["bucket"] == bucket]
+
+
 def summarise(run_dirs: Iterable[str | Path], *, judge: str | None = None, n_boot: int = N_BOOT,
-              seed: int = SEED, keep: set[tuple[str, str]] | None = None) -> pd.DataFrame:
-    """One row per run dir: provider, mode, n, each metric with `<metric>_lo/_hi` 95 % bootstrap CI columns."""
+              seed: int = SEED, keep: set[tuple[str, str]] | None = None, bucket: str | None = None) -> pd.DataFrame:
+    """One row per run dir: provider, mode, n, each metric with `<metric>_lo/_hi` 95 % bootstrap CI columns.
+
+    `bucket=None` (default) keeps every row with the perception axis columns (Timing then covers all timed
+    rows, both buckets); `bucket="generation"` restricts to generation rows and uses `GEN_AXIS_COLUMNS`.
+    """
     rows = []
+    cols = axis_columns_for(bucket)
     for rd in run_dirs:
         r = load_run(rd, judge, keep)
         row = {"run": r["run"], "Model": r["Model"], "Setting": r["Setting"], "group": r["group"],
                "provider": r["provider"], "mode": r["mode"], "model": r["model"], "judge": r["judge"]}
-        row.update(_metrics(r["clips"], n_boot=n_boot, seed=seed))
+        row.update(_metrics(_bucket_clips(r["clips"], bucket), n_boot=n_boot, seed=seed, axis_columns=cols))
         rows.append(row)
     return _paper_order(pd.DataFrame(rows))
+
+
+def has_generation_scores(run_dirs: Iterable[str | Path], judge: str | None = None,
+                          keep: set[tuple[str, str]] | None = None) -> bool:
+    """True when any run dir has a generation row with a generation judge axis."""
+    gen = {a for a, _ in GEN_AXIS_COLUMNS}
+    for rd in run_dirs:
+        for c in load_run(rd, judge, keep)["clips"]:
+            if c["bucket"] == Bucket.GENERATION.value and gen & set(c["axes"]):
+                return True
+    return False
 
 
 def _paper_order(df: pd.DataFrame) -> pd.DataFrame:
@@ -262,18 +315,19 @@ def _paper_order(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def per_dynamic(run_dirs: Iterable[str | Path], *, judge: str | None = None, n_boot: int = N_BOOT,
-                seed: int = SEED, keep: set[tuple[str, str]] | None = None) -> pd.DataFrame:
-    """One row per (run dir, dynamic) with the same metric/CI columns as `summarise`."""
+                seed: int = SEED, keep: set[tuple[str, str]] | None = None, bucket: str | None = None) -> pd.DataFrame:
+    """One row per (run dir, dynamic) with the same metric/CI columns as `summarise` (same `bucket` rule)."""
     rows = []
+    cols = axis_columns_for(bucket)
     for rd in run_dirs:
         r = load_run(rd, judge, keep)
         by_dyn: dict[str, list[dict]] = {}
-        for c in r["clips"]:
+        for c in _bucket_clips(r["clips"], bucket):
             by_dyn.setdefault(c["dynamic_type"] or "?", []).append(c)
         for dyn in sorted(by_dyn):
             row = {"run": r["run"], "Model": r["Model"], "Setting": r["Setting"], "group": r["group"],
                    "provider": r["provider"], "mode": r["mode"], "model": r["model"], "dynamic_type": dyn}
-            row.update(_metrics(by_dyn[dyn], n_boot=n_boot, seed=seed))
+            row.update(_metrics(by_dyn[dyn], n_boot=n_boot, seed=seed, axis_columns=cols))
             rows.append(row)
     return _paper_order(pd.DataFrame(rows))
 
@@ -335,15 +389,16 @@ def _cell(row: pd.Series, label: str) -> str:
     return f"{_fmt(v, digits)} [{_fmt(lo, digits)}, {_fmt(hi, digits)}]"
 
 
-def to_markdown(df: pd.DataFrame, id_cols: list[str]) -> str:
+def to_markdown(df: pd.DataFrame, id_cols: list[str], metric_cols: list[str] | None = None) -> str:
     """Markdown table with CIs: id columns + n + each metric as `point [lo, hi]`."""
     if df.empty:
         return "_(no runs)_\n"
-    cols = id_cols + ["n"] + METRIC_COLUMNS
+    metrics = metric_cols or METRIC_COLUMNS
+    cols = id_cols + ["n"] + metrics
     lines = ["| " + " | ".join(cols) + " |", "|" + "|".join("---" for _ in cols) + "|"]
     for _, row in df.iterrows():
         cells = [str(row.get(c, "")) for c in id_cols] + [str(int(row["n"]))]
-        cells += [_cell(row, m) for m in METRIC_COLUMNS]
+        cells += [_cell(row, m) for m in metrics]
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines) + "\n"
 
@@ -355,16 +410,18 @@ def _timing_cell(row: pd.Series) -> str:
     return f"{_fmt(tor, 0)}% / {_fmt(lat, 0)} ms" if not (isinstance(lat, float) and math.isnan(lat)) else f"{_fmt(tor, 0)}% / —"
 
 
-def to_paper_markdown(df: pd.DataFrame, extra_cols: list[str] | None = None) -> str:
+def to_paper_markdown(df: pd.DataFrame, extra_cols: list[str] | None = None,
+                      paper_cols: list[str] | None = None) -> str:
     """Project-page layout: rows grouped under setting headers; Model | [extra] | n | axes | Overall | Timing.
 
     Point estimates only (the CI table is `to_markdown`); Timing = "TOR-Align % / median latency ms",
-    as in the page's Table 1 ("90% / 1400 ms").
+    as in the page's Table 1 ("90% / 1400 ms"). `paper_cols` = `GEN_PAPER_COLUMNS` for the generation table.
     """
     if df.empty:
         return "_(no runs)_\n"
     extra = extra_cols or []
-    cols = ["Model"] + extra + ["n"] + [f"{c} ↑" for c in PAPER_COLUMNS]
+    pcols = paper_cols or PAPER_COLUMNS
+    cols = ["Model"] + extra + ["n"] + [f"{c} ↑" for c in pcols]
     lines = ["| " + " | ".join(cols) + " |", "|" + "|".join("---" for _ in cols) + "|"]
     for g, header in SETTING_GROUPS:
         sub = df[df["group"] == g] if "group" in df else df.iloc[0:0]
@@ -373,12 +430,12 @@ def to_paper_markdown(df: pd.DataFrame, extra_cols: list[str] | None = None) -> 
         lines.append("| **" + header + "** |" + " |" * (len(cols) - 1))
         for _, row in sub.iterrows():
             cells = [str(row["Model"])] + [str(row.get(c, "")) for c in extra] + [str(int(row["n"]))]
-            cells += [_fmt(row.get(m, math.nan), 2) for m in PAPER_COLUMNS if m != "Timing"] + [_timing_cell(row)]
+            cells += [_fmt(row.get(m, math.nan), 2) for m in pcols if m != "Timing"] + [_timing_cell(row)]
             lines.append("| " + " | ".join(cells) + " |")
     rest = df[~df["group"].isin([g for g, _ in SETTING_GROUPS])] if "group" in df else df.iloc[0:0]
     for _, row in rest.iterrows():
         cells = [str(row["Model"])] + [str(row.get(c, "")) for c in extra] + [str(int(row["n"]))]
-        cells += [_fmt(row.get(m, math.nan), 2) for m in PAPER_COLUMNS if m != "Timing"] + [_timing_cell(row)]
+        cells += [_fmt(row.get(m, math.nan), 2) for m in pcols if m != "Timing"] + [_timing_cell(row)]
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines) + "\n"
 
@@ -424,6 +481,33 @@ def write(run_dirs: Iterable[str | Path], per_dynamic: bool = False, out: str | 
         parts += ["## Per dynamic", "", to_paper_markdown(pdf, ["Setting", "dynamic_type"]),
                   "## Per dynamic with 95 % bootstrap CIs", "",
                   to_markdown(pdf, ["Model", "Setting", "dynamic_type"])]
+    if has_generation_scores(run_dirs, judge, keep):
+        g = Bucket.GENERATION.value
+        gdf = summarise(run_dirs, judge=judge, n_boot=n_boot, seed=seed, keep=keep, bucket=g)
+        gdf = gdf[gdf["n"] > 0]
+        gdf.to_csv(out.with_name(out.stem + "_generation.csv"), index=False)
+        parts += [
+            "# Generation",
+            "",
+            ("Generation-bucket rows only (project page Table 2): Fluency = Generation Fluency, Dyadic Affect = "
+             "Affect Match, NV Cue Approp. = cue_appropriateness of the per-category decomposed rubric (vision judge "
+             "on side-by-side frames, docs/protocol.md §6). Overall = mean of each generation row's available axes. "
+             "Timing = TOR-Align % / median latency over the timed generation rows (Verbal Interruption, Turn-taking, "
+             "Verbal Backchanneling); Laughter / Nonverbal Backchanneling / affect rows have no timing class. "
+             "n = generation rows present in the run (timing and/or judge); the CI table's per-axis n is in the CSV."),
+            "",
+            to_paper_markdown(gdf, ["Setting"], GEN_PAPER_COLUMNS),
+            "## Generation with 95 % bootstrap CIs",
+            "",
+            to_markdown(gdf, ["Model", "Setting"], GEN_METRIC_COLUMNS),
+        ]
+        if per_dynamic:
+            gpdf = _per_dynamic_table(run_dirs, judge=judge, n_boot=n_boot, seed=seed, keep=keep, bucket=g)
+            gpdf.to_csv(out.with_name(out.stem + "_generation_per_dynamic.csv"), index=False)
+            parts += ["## Generation per dynamic", "",
+                      to_paper_markdown(gpdf, ["Setting", "dynamic_type"], GEN_PAPER_COLUMNS),
+                      "## Generation per dynamic with 95 % bootstrap CIs", "",
+                      to_markdown(gpdf, ["Model", "Setting", "dynamic_type"], GEN_METRIC_COLUMNS)]
     out.write_text("\n".join(parts), encoding="utf-8")
     return out
 

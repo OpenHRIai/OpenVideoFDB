@@ -1,0 +1,196 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>OpenVideoFDB avatar harness</title>
+<style>body{margin:0;background:#111;color:#ccc;font:12px monospace} video{width:320px;height:180px;background:#000} #log{white-space:pre-wrap}</style>
+</head>
+<body>
+<div>
+  <video id="user" playsinline></video>
+  <video id="agent" autoplay playsinline></video>
+</div>
+<div id="log"></div>
+<script>
+// Harness page for WebRTC-only avatar vendors (Tavus CVI via Daily, Anam via its JS SDK).
+// Query: ?vendor=tavus|anam&ws=<port>&video=/clip/user.mp4&audio=/clip/user.wav&room=<daily url>|&token=<anam token>
+// Protocol over the WebSocket (JSON text frames unless noted):
+//   page -> py: {"ev":"log",...} | {"ev":"ready", ...} | {"ev":"started", t0_ms} | {"ev":"first_audio"|"first_video", t} |
+//               binary: 0x01 + float64 t_s + int16 pcm (16 kHz mono, agent audio)   | 0x02 + webm blob (at stop)
+//               {"ev":"stopped", ...stats}
+//   py -> page: {"cmd":"go"} | {"cmd":"stop"}
+const q = new URLSearchParams(location.search);
+const vendor = q.get("vendor");
+const logEl = document.getElementById("log");
+let ws;
+const log = (...a) => { const s = a.map(x => typeof x === "string" ? x : JSON.stringify(x)).join(" "); logEl.textContent += s + "\n"; try { ws && ws.readyState === 1 && ws.send(JSON.stringify({ev: "log", msg: s})); } catch (e) {} };
+const send = (o) => ws.send(JSON.stringify(o));
+window.addEventListener("error", e => log("PAGE ERROR", e.message));
+window.addEventListener("unhandledrejection", e => log("PAGE REJECTION", String(e.reason && e.reason.stack || e.reason)));
+
+const SR = 16000;
+const ctx = new AudioContext({sampleRate: SR});
+let userStream, userAudioBuf, userVideo = document.getElementById("user");
+let remoteStream = null, remoteVideoTrack = null, remoteAudioTrack = null;
+let t0ms = null;                       // performance.now() at clip start (= clip t=0)
+const nowS = () => (performance.now() - t0ms) / 1000;
+let recorder = null, recChunks = [];
+let captureNode = null, firstAudioSent = false, firstVideoSent = false;
+let stats = {};
+
+async function makeUserStream() {
+  // Video: the clip's mp4 in a <video>, captured; audio: the 16 kHz wav decoded into a buffer and
+  // played through a MediaStreamDestination at "go" time, so t=0 is sample-accurate and the video
+  // element starts in the same tick.
+  userVideo.src = q.get("video"); userVideo.muted = true; userVideo.preload = "auto";
+  await new Promise((res, rej) => { userVideo.oncanplaythrough = res; userVideo.onerror = () => rej(new Error("user video load failed")); userVideo.load(); });
+  const vs = userVideo.captureStream ? userVideo.captureStream() : userVideo.mozCaptureStream();
+  const vTrack = vs.getVideoTracks()[0];
+  const wav = await (await fetch(q.get("audio"))).arrayBuffer();
+  userAudioBuf = await ctx.decodeAudioData(wav);
+  const dest = ctx.createMediaStreamDestination();
+  window._userDest = dest;
+  userStream = new MediaStream([dest.stream.getAudioTracks()[0]].concat(vTrack ? [vTrack] : []));
+  log("user stream", {video: !!vTrack, audio_s: userAudioBuf.duration.toFixed(2), clip_w: userVideo.videoWidth, clip_h: userVideo.videoHeight});
+  return userStream;
+}
+
+function startUserPlayback() {
+  const src = ctx.createBufferSource(); src.buffer = userAudioBuf; src.connect(window._userDest);
+  t0ms = performance.now();
+  src.start(ctx.currentTime);
+  userVideo.currentTime = 0; userVideo.play().catch(e => log("user video play failed", String(e)));
+  return t0ms;
+}
+
+// ---- remote capture: AudioWorklet 16 kHz PCM with timestamps, MediaRecorder for video+audio ----
+const workletSrc = `
+class Cap extends AudioWorkletProcessor {
+  constructor(){ super(); this.buf = []; this.n = 0; }
+  process(inputs){ const ch = inputs[0] && inputs[0][0]; if (!ch) return true;
+    this.buf.push(new Float32Array(ch)); this.n += ch.length;
+    if (this.n >= 640) { const out = new Float32Array(this.n); let o = 0; for (const b of this.buf) { out.set(b, o); o += b.length; }
+      this.port.postMessage(out, [out.buffer]); this.buf = []; this.n = 0; }
+    return true; }
+}
+registerProcessor("cap", Cap);`;
+
+async function startRemoteCapture() {
+  const url = URL.createObjectURL(new Blob([workletSrc], {type: "application/javascript"}));
+  await ctx.audioWorklet.addModule(url);
+  const srcNode = ctx.createMediaStreamSource(new MediaStream([remoteAudioTrack]));
+  captureNode = new AudioWorkletNode(ctx, "cap");
+  captureNode.port.onmessage = (e) => {
+    if (t0ms === null) return;
+    const f32 = e.data; const t = nowS() - f32.length / SR;   // chunk start time
+    let nz = false; const i16 = new Int16Array(f32.length);
+    for (let i = 0; i < f32.length; i++) { const v = Math.max(-1, Math.min(1, f32[i])); i16[i] = v * 32767; if (!nz && Math.abs(v) > 0.01) nz = true; }
+    if (!firstAudioSent && nz) { firstAudioSent = true; stats.first_audio_s = t; send({ev: "first_audio", t}); }
+    const out = new Uint8Array(9 + i16.byteLength); out[0] = 1;
+    new DataView(out.buffer).setFloat64(1, t, true); out.set(new Uint8Array(i16.buffer), 9);
+    ws.send(out.buffer);
+  };
+  srcNode.connect(captureNode);   // not connected to destination: nothing is played out
+  const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus") ? "video/webm;codecs=vp8,opus" : "video/webm";
+  recorder = new MediaRecorder(new MediaStream([remoteVideoTrack, remoteAudioTrack].filter(Boolean)), {mimeType: mime, videoBitsPerSecond: 2500000});
+  recorder.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+  recorder.start(1000);
+  stats.recorder_start_s = nowS();
+  // first decoded remote frame after t0
+  const av = document.getElementById("agent");
+  if (av.requestVideoFrameCallback) {
+    const cb = (now, meta) => { if (!firstVideoSent && t0ms !== null) { firstVideoSent = true; stats.first_video_s = nowS(); send({ev: "first_video", t: stats.first_video_s}); } };
+    av.requestVideoFrameCallback(cb);
+  }
+}
+
+async function stopAll() {
+  stats.stop_s = t0ms === null ? null : nowS();
+  if (recorder && recorder.state !== "inactive") {
+    await new Promise(res => { recorder.onstop = res; recorder.stop(); });
+  }
+  const blob = new Blob(recChunks, {type: "video/webm"});
+  const buf = new Uint8Array(1 + blob.size); buf[0] = 2; buf.set(new Uint8Array(await blob.arrayBuffer()), 1);
+  ws.send(buf.buffer);
+  stats.webm_bytes = blob.size;
+  try { await leave(); } catch (e) { log("leave failed", String(e)); }
+  send({ev: "stopped", stats});
+}
+
+// ---- vendors ----
+let leave = async () => {};
+
+async function joinTavus() {
+  await new Promise((res, rej) => { const s = document.createElement("script"); s.src = "https://unpkg.com/@daily-co/daily-js"; s.onload = res; s.onerror = () => rej(new Error("daily-js load failed")); document.head.appendChild(s); });
+  const call = window.Daily.createCallObject({audioSource: userStream.getAudioTracks()[0], videoSource: userStream.getVideoTracks()[0] || false, subscribeToTracksAutomatically: true});
+  window._call = call;
+  const gotVideo = new Promise(res => call.on("track-started", ev => {
+    if (ev.participant && ev.participant.local) return;
+    log("remote track", ev.track.kind, ev.participant && ev.participant.user_name);
+    if (ev.track.kind === "video" && !remoteVideoTrack) { remoteVideoTrack = ev.track; }
+    if (ev.track.kind === "audio" && !remoteAudioTrack) { remoteAudioTrack = ev.track; }
+    if (remoteVideoTrack && remoteAudioTrack) res();
+  }));
+  call.on("error", e => log("daily error", e));
+  call.on("participant-left", e => log("participant-left", e.participant && e.participant.user_name));
+  await call.join({url: q.get("room")});
+  log("joined daily room");
+  await gotVideo;
+  remoteStream = new MediaStream([remoteVideoTrack, remoteAudioTrack]);
+  document.getElementById("agent").srcObject = remoteStream;
+  leave = async () => { await call.leave(); await call.destroy(); };
+}
+
+async function joinAnam() {
+  // Whatever the SDK does for its microphone, hand it the clip: override getUserMedia so a mic
+  // request returns our user stream (audio only, or audio+video if asked), and also pass the stream
+  // explicitly. Verified against the INPUT_AUDIO_STREAM_STARTED track id.
+  const ourAudioId = userStream.getAudioTracks()[0].id;
+  navigator.mediaDevices.getUserMedia = async (c) => {
+    log("getUserMedia intercepted", c);
+    const tracks = [userStream.getAudioTracks()[0]];
+    if (c && c.video) tracks.push(userStream.getVideoTracks()[0]);
+    return new MediaStream(tracks.filter(Boolean));
+  };
+  const mod = await import("https://esm.sh/@anam-ai/js-sdk@latest");
+  const {createClient, AnamEvent} = mod;
+  const client = createClient(q.get("token"));
+  window._anam = client;
+  const ready = new Promise(res => client.addListener(AnamEvent.VIDEO_PLAY_STARTED, () => { log("anam VIDEO_PLAY_STARTED"); res(); }));
+  client.addListener(AnamEvent.VIDEO_STREAM_STARTED, (s) => { remoteVideoTrack = s.getVideoTracks()[0]; log("anam video stream"); });
+  client.addListener(AnamEvent.AUDIO_STREAM_STARTED, (s) => { remoteAudioTrack = s.getAudioTracks()[0]; log("anam audio stream"); });
+  client.addListener(AnamEvent.INPUT_AUDIO_STREAM_STARTED, (s) => { const t = s && s.getAudioTracks()[0]; stats.input_is_clip = !!t && t.id === ourAudioId; log("anam input audio stream", t && t.id, "is_clip", stats.input_is_clip); });
+  client.addListener(AnamEvent.USER_SPEECH_STARTED, () => { stats.n_user_speech = (stats.n_user_speech || 0) + 1; });
+  client.addListener(AnamEvent.SESSION_READY, (id) => log("anam SESSION_READY", id));
+  client.addListener(AnamEvent.CONNECTION_CLOSED, (r, d) => log("anam CONNECTION_CLOSED", r, d));
+  client.addListener(AnamEvent.MESSAGE_HISTORY_UPDATED, (m) => { stats.n_messages = m.length; });
+  const audioOnly = new MediaStream(userStream.getAudioTracks());
+  await client.streamToVideoElement("agent", audioOnly);
+  await ready;
+  const av = document.getElementById("agent");
+  if (!remoteVideoTrack && av.srcObject) remoteVideoTrack = av.srcObject.getVideoTracks()[0];
+  if (!remoteAudioTrack && av.srcObject) remoteAudioTrack = av.srcObject.getAudioTracks()[0];
+  leave = async () => { await client.stopStreaming(); };
+}
+
+async function main() {
+  ws = new WebSocket("ws://127.0.0.1:" + q.get("ws"));
+  await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
+  log("ws open; vendor", vendor);
+  try {
+    await ctx.resume();
+    await makeUserStream();
+    if (vendor === "tavus") await joinTavus(); else if (vendor === "anam") await joinAnam(); else throw new Error("unknown vendor " + vendor);
+    if (!remoteVideoTrack || !remoteAudioTrack) throw new Error("no remote tracks");
+    send({ev: "ready", video: remoteVideoTrack.getSettings(), audio: !!remoteAudioTrack});
+  } catch (e) { log("setup failed", String(e && e.stack || e)); send({ev: "error", msg: String(e)}); return; }
+  ws.onmessage = async (m) => {
+    const o = JSON.parse(m.data);
+    if (o.cmd === "go") { const t = startUserPlayback(); await startRemoteCapture(); send({ev: "started", t0_ms: t, rec_start_s: stats.recorder_start_s}); }
+    else if (o.cmd === "stop") { await stopAll(); }
+  };
+}
+main();
+</script>
+</body>
+</html>

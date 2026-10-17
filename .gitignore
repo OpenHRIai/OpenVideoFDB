@@ -34,3 +34,4 @@ build/
 
 # NVIDIA manifests carry the gated dataset's annotations/captions: never in git
 manifest/nvidia_*.jsonl
+.tavus_persona

@@ -24,6 +24,7 @@ dependencies = [
     "faster-whisper>=1.0",
     "websockets>=12",
     "huggingface-hub>=0.24",
+    "playwright>=1.64.0",
 ]
 
 [project.urls]

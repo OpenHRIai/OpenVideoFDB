@@ -26,7 +26,8 @@ evaluation code or official scorer. This repository provides:
 Status (2026-10-16): the pipeline reproduces the paper's human-reference numbers on the
 NVIDIA test split where that is computable, and the two API models land within 0.25
 overall of the project page on the full 226-row test split (both AV2A and A2A). The
-generation (video-out) judge is not done yet. See *Results* and *Status* below.
+generation (video-out) judge is implemented and run on the human reference and on a
+Tavus CVI avatar. See *Results* and *Status* below.
 
 ## Results
 
@@ -62,6 +63,22 @@ overall per model with overlapping CIs. Our Conv. Flow runs higher and Gemini's 
 lower than the paper's; TOR-Alignment is 56–60 % against 66–72 %; our gpt-realtime
 latency is 1.1–1.4 s where the paper reports 4.4–5.4 s (onset definition, see the notes).
 The validation-split smoke test (11 public rows) is in `results/nvidia_validation.md`.
+
+**NVIDIA test split, generation bucket (video out), 121 rows** (`results/nvidia_generation.md`):
+vision judge on side-by-side frames, rubrics from the paper's F.6. Fluency / Dyadic Affect /
+NV Cue Approp. / Overall. The human reference exists for the 30 rows with a partner video.
+
+| Model | Setting | n | Fluency | Dyadic Affect | NV Cue | Overall | Timing | Paper overall / timing |
+|---|---|---|---|---|---|---|---|---|
+| Human reference | AV2AV | 30 | 4.17 | 3.30 | 3.00 | 3.49 | — | 3.92 / 78 % / 900 ms |
+| Random baseline | AV2AV | 121 | 2.17 | 1.77 | 0.97 | 1.63 | 31 % / 0 ms | — |
+| Tavus CVI (Phoenix-4.5 + tavus-gemma-4, cascaded) | AV2AV | 121 | 3.79 | 2.30 | 1.65 | 2.63 | 31 % / 1956 ms | cascaded rows 2.80 / 2.39 |
+
+Tavus CVI here is Tavus's hosted cascaded pipeline, not the paper's full-duplex Tavus Griffin
+Lite (3.83). Its visual channel never produces a laugh, nod or smile inside a window (NV Cue
+0.00 on Laughter and Nonverbal Backchanneling), which reproduces the paper's finding that
+cascaded avatars cannot insert nonverbal cues during the user's turn. Anam (A2AV) is wired
+up but waits on plan minutes.
 
 **Open Seamless-derived set, 60 day-1 rows** (`results/v0_summary.md`, manifest v0):
 
