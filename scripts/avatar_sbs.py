@@ -6,8 +6,8 @@ each responder's onset with its latency); each responder pane carries its own sp
         --out data/announcement/avatars_<clip>.mp4 [--panes gt:Human,heygen_a2av:HeyGen,tavus_av2av:Tavus,anam_a2av:Anam]
 
 Needs `<runs>/<run>/<clip>/{agent.mp4|run.json, <bucket>/timing.json}` (run `ovfdb score-timing` first: the
-timeline uses its `segments`). The user lane comes from the manifest's `user_words`. Audio = user + the avatar
-panes at -6 dB (the human pane is muted: it is the visual reference). Layout 1920x1080: user 640x1080 | grid
+timeline uses its `segments`). The user lane comes from the manifest's `user_words`. Audio = every voice
+loudness-normalised to -18 LUFS (avatars 3 dB under), mixed and limited. Layout 1920x1080: user 640x1080 | grid
 2x2 of 640x360 | timeline 1280x360.
 """
 from __future__ import annotations
@@ -238,13 +238,15 @@ def build(clip_id: str, runs: Path, manifest: Path, out: Path, panes: list[tuple
         fc.append(f"[{tl_idx}:v]scale={TL_W}:{TL_H}[tl]")
         fc.append("[grid][tl]vstack[right]")
         fc.append("[u][right]hstack[v]")
-        # audio: user + avatar panes (-6 dB), human pane muted
-        amix = ["[1:a]"]
+        # audio: every voice loudness-normalised (the lapel mics peak at -30 dB, the avatars' TTS at 0 dB), the
+        # user and the human partner at -18 LUFS, the avatars 3 dB under them; limited after the mix
+        fc.append("[1:a]loudnorm=I=-18:TP=-2:LRA=11[au]")
+        amix = ["[au]"]
         for i, (run, _) in enumerate(panes):
-            if not run.startswith("gt"):
-                fc.append(f"[{2 + i}:a]volume=0.5[a{i}]")
-                amix.append(f"[a{i}]")
-        fc.append(f"{''.join(amix)}amix=inputs={len(amix)}:duration=first:normalize=0[a]")
+            gain = "" if run.startswith("gt") else ",volume=0.7"
+            fc.append(f"[{2 + i}:a]loudnorm=I=-18:TP=-2:LRA=11{gain}[a{i}]")
+            amix.append(f"[a{i}]")
+        fc.append(f"{''.join(amix)}amix=inputs={len(amix)}:duration=first:normalize=0,alimiter=limit=0.9[a]")
         cmd = ["ffmpeg", "-y", "-loglevel", "error", *inputs, "-filter_complex", ";".join(fc),
                "-map", "[v]", "-map", "[a]", "-t", f"{dur:.2f}", "-r", str(FPS), "-c:v", "libx264", "-preset",
                "medium", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags",

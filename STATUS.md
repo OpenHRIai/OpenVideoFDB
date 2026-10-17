@@ -100,8 +100,8 @@ Re-running: `ovfdb run` is resumable (skips dirs with run.json); a connection dr
 - `scripts/avatar_sbs.py`: user (left) | human partner + 3 avatars (2x2) | one event timeline: the user's speech
   (VAD on user.wav — the v1 word alignment can smear a word over silence, e.g. P0222_c00 "Yeah," 7.1–16.9 s),
   then "User stops speaking" and each responder's first onset popping in with its latency; each responder pane
-  carries its own speech strip (own spans, user-stop marker, playhead) along its bottom edge. PIL-rendered labels (this ffmpeg lacks drawtext); audio = user + avatars at -6 dB,
-  human pane muted; CC BY-NC attribution burned in. Outputs (not in git) in `data/announcement/`:
+  carries its own speech strip (own spans, user-stop marker, playhead) along its bottom edge. PIL-rendered labels (this ffmpeg lacks drawtext); audio = every voice loudnorm'd to -18 LUFS
+  (avatars -3 dB), limited — the lapel mics peak at -30 dB vs TTS at 0 dB; CC BY-NC attribution burned in. Outputs (not in git) in `data/announcement/`:
   `avatars_turn_taking_c02.mp4` (P0223_c02: human +0.5 s, Tavus +2.2, HeyGen +2.3, Anam +3.7) and
   `avatars_turn_taking_c00.mp4` (P0222_c00: human +0.4 s, HeyGen +1.8, Tavus +2.8, Anam +4.3; the user is silent
   after 7.4 s in both clips — nobody talks over anyone).
