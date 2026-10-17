@@ -93,6 +93,22 @@ Re-running: `ovfdb run` is resumable (skips dirs with run.json); a connection dr
   perception table and names them in its note — they used to show n = 145 with "—" cells (24 dual-bucket clips
   got a timing-only perception row). Test: `test_write_lists_generation_only_runs_in_generation_tables_only`.
 
+### Post video: three avatars on Seamless clips (2026-10-17, session 4)
+- NVIDIA clips cannot appear in posts (no redistribution/derivatives), so the three avatars were re-run on 7
+  Seamless v1 clips (4 Turn-taking + 3 Verbal Interruption; `runs_v1/post/manifest.jsonl`, runs in
+  `runs_v1/post/{gt,heygen_a2av,tavus_av2av,anam_a2av}`, timing scored; ≈ 2.3 clip-minutes per vendor).
+- `scripts/avatar_sbs.py`: user (left) | human partner + 3 avatars (2x2) | one event timeline: the user's speech
+  (VAD on user.wav — the v1 word alignment can smear a word over silence, e.g. P0222_c00 "Yeah," 7.1–16.9 s),
+  then "User stops speaking" and each responder's first onset popping in with its latency; each responder pane
+  carries its own speech strip (own spans, user-stop marker, playhead) along its bottom edge. PIL-rendered labels (this ffmpeg lacks drawtext); audio = user + avatars at -6 dB,
+  human pane muted; CC BY-NC attribution burned in. Outputs (not in git) in `data/announcement/`:
+  `avatars_turn_taking_c02.mp4` (P0223_c02: human +0.5 s, Tavus +2.2, HeyGen +2.3, Anam +3.7) and
+  `avatars_turn_taking_c00.mp4` (P0222_c00: human +0.4 s, HeyGen +1.8, Tavus +2.8, Anam +4.3; the user is silent
+  after 7.4 s in both clips — nobody talks over anyone).
+  Title "Turn-taking latency" (script default `<dynamic> latency`). A frame of c02 is in the README
+  (`docs/media/avatars_turn_taking_c02.png`); GitHub does not play repo-hosted mp4s inline, so the video itself is
+  linked/attached separately (web-editor upload or a release asset).
+
 ### Next (priority order)
 1. Tavus CVI on the 105 perception rows (paper Table 1 AV2AV row; ≈ 145 Tavus minutes) — `run_manifest(..., provider='tavus', bucket='perception')`, then `ovfdb score` (perception judge) and add to `results/nvidia_test.md`. Affect-Match offset: try adding an agent-side visual/audio caption (Gemini Flash) to the generation payload and re-judge gt.
 2. Second judge (claude) for agreement numbers (`report.agreement`; needs ANTHROPIC_API_KEY).

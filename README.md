@@ -83,7 +83,16 @@ rows for Tavus and Anam; one smiling row on each dynamic for HeyGen), which repr
 paper's finding that cascaded avatars cannot insert nonverbal cues during the user's turn.
 HeyGen and Tavus CVI are not separable overall (paired difference +0.12, 95 % CI −0.12 to +0.35);
 HeyGen is more fluent (+0.37, CI +0.11 to +0.64) and both are above Anam. CIs cover row sampling
-only (one judge, one run per vendor); see the generation notes in `results/nvidia_test.md`. Fluency, cue and timing match the paper's cascaded rows; Dyadic
+only (one judge, one run per vendor); see the generation notes in `results/nvidia_test.md`.
+
+![Turn-taking latency: the user finishes a sentence; the human partner answers after 0.5 s, Tavus CVI after 2.2 s, HeyGen after 2.3 s, Anam after 3.7 s](docs/media/avatars_turn_taking_c02.png)
+
+*Turn-taking latency on one open (Seamless-derived) clip: the user finishes a sentence and the
+human partner answers in 0.5 s; the three cascaded avatars take 2.2–3.7 s. Frame from
+`scripts/avatar_sbs.py` (user | human partner + avatars | event timeline, each pane with its own
+speech strip). The NVIDIA clips cannot be shown, so the avatars were re-run on 7 Seamless clips
+for this figure (`runs_v1/post`); the pattern matches the NVIDIA Turn-taking medians (HeyGen /
+Tavus 1.9 s, Anam 5.1 s). Clip: Seamless Interaction Dataset (Meta FAIR), CC BY-NC 4.0.* Fluency, cue and timing match the paper's cascaded rows; Dyadic
 Affect runs lower for every configuration including the human reference (judge-side offset,
 see the notes).
 
