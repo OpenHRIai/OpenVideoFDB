@@ -51,8 +51,9 @@ Re-running: `ovfdb run` is resumable (skips dirs with run.json); a connection dr
   Anam-hosted Gemini 3 Flash; `getUserMedia` is overridden in the page so the SDK's mic = the clip — without that
   Anam never hears the user and monologues "it's been quiet").
 - Runs on the 121 generation rows (human-reference rows first): `runs_nv/tavus_av2av` **done and scored** (see results/nvidia_generation.md notes for run facts);
-  `runs_nv/anam_a2av` stopped at 1 valid row — **Anam usage limit reached** (free 30 min; ~25 of them burnt by the
-  first, invalid run). Resume after upgrading with the same command (resumable; errored dirs already deleted):
+  `runs_nv/anam_a2av` **done** (121 rows over five free-tier keys ANAM_API_KEY..KEY5, three parallel shards via
+  `shard=(i,3)` with `ANAM_API_KEY` exported per process; "Concurrency limit" right after a close is transient and
+  retried; "Usage limit" aborts the shard cleanly, no run.json). Same command to resume/re-run:
   `uv run python -c "from ovfdb.harness import streamer; streamer.run_manifest('manifest/nvidia_test.jsonl', provider='anam', mode='a2a', out='runs_nv/anam_a2av', concurrency=1, bucket='generation', partner_video_first=True)"`
 - Generation-judge width ablation (2026-10-16, gt 30 rows, gpt-4o): 512 px frames give 4.17 / 3.20 / 2.83 / 3.40 vs
   256 px 4.17 / 3.30 / 3.00 / 3.49 (paper 4.42 / 4.14 / 3.18 / 3.92) — pane size is not what holds Affect Match down;
@@ -63,7 +64,7 @@ Re-running: `ovfdb run` is resumable (skips dirs with run.json); a connection dr
   Generation judge (gpt-4o, 3 axes, ≤500 low-detail frames) ≈ $0.26/row → ≈ $32 per 121-row configuration.
 
 ### Next (priority order)
-1. Anam A2AV run once the plan has minutes (resume command above), then `score-timing` + `score-generation` + `report` with `runs_nv/anam_a2av` added; optionally the 105 perception rows for Tavus (Table 1 AV2AV row, ≈ 145 more Tavus minutes).
+1. Tavus CVI on the 105 perception rows (paper Table 1 AV2AV row; ≈ 145 Tavus minutes) — `run_manifest(..., provider='tavus', bucket='perception')`, then `ovfdb score` (perception judge) and add to `results/nvidia_test.md`. Affect-Match offset: try adding an agent-side visual/audio caption (Gemini Flash) to the generation payload and re-judge gt.
 2. Second judge (claude) for agreement numbers (`report.agreement`; needs ANTHROPIC_API_KEY).
 3. Seamless track items (see below): Verbal Backchanneling decision, laughter bleed fix, top-ups, v1 model runs.
 4. Tavus/Anam on the Seamless v1 manifest (same harness; CC-BY-NC clips can be shown in posts).
@@ -122,7 +123,7 @@ Re-running: `ovfdb run` is resumable (skips dirs with run.json); a connection dr
 | WS3 harness (Gemini Live) | done | agent (session 1) | 2026-10-15 | streamer/recorder/human_gt/random/gemini_live; live smoke OK on `gemini-3.1-flash-live-preview` (AV + a2a), drift < 40 ms, no errors. `scripts/smoke_gemini_live.py` |
 | WS4 scoring: ASR + timing | done | agent (session 1) | 2026-10-15 | segments/timing/asr/pipeline; 31 tests; faster-whisper small.en int8 ≈ 8× RT. `timing.json` carries all judge blocks except caption/user words |
 | WS5 judge + calibration | done (payload v2 calibrated) | session 2 | 2026-10-16 | rubrics verbatim, judge (gpt-4o/claude/gemini backends), report w/ bootstrap CIs. Payload v2: GT 4.12 vs random 2.70; results/calibration_v2.md. ≈$0.013/row-axis |
-| WS6 providers: OpenAI RT, Tavus/Anam, gen judge | 6a, 6c done; 6b done for Tavus (121 gen rows), Anam blocked on plan minutes | session 3 (+ agent for 6c) | 2026-10-17 | `results/nvidia_generation.md`: gt 4.17/3.30/3.00/3.49 (paper 3.92), random 1.63, **Tavus CVI 3.79/2.30/1.65/2.63**, TOR 31 %/1956 ms. Judge: `score-generation` (gpt-4o vision, F.6 rubrics verbatim, ≈$0.26/row). Harness: `playwright_avatar.py` + `web/avatar.html`. Anam: 1 valid row, free minutes exhausted — resume command in the WS6b section |
+| WS6 providers: OpenAI RT, Tavus/Anam, gen judge | **done** (6a, 6b Tavus + Anam on the 121 generation rows, 6c) | session 3 (+ agent for 6c) | 2026-10-17 | `results/nvidia_generation.md`: gt 4.17/3.30/3.00/3.49 (paper 3.92), random 1.63, **Tavus CVI 3.79/2.30/1.65/2.63** (31 %/1956 ms), **Anam 3.41/1.51/1.26/2.15** (44 %/2092 ms; paper Gemini 2.5+Anam 2.80, 44 %/2840). Judge `score-generation` (gpt-4o vision, F.6 rubrics, ≈$0.26/row). Harness `playwright_avatar.py` + `web/avatar.html` (`run_manifest(bucket, partner_video_first, shard)`). Not run: Tavus perception rows (Table 1 AV2AV) |
 | WS7 NVIDIA adapter + test-split runs | done | session 3 | 2026-10-16 | loader, gt/random, and the 4 API-model configs on all 226 test rows scored + reported: `results/nvidia_test.md`. Generation judge (WS6c) still todo |
 | WS8 report + publish | results tables done; README/publish todo | session 2 | 2026-10-16 | results/v0_summary.md (day-1 rows), results/v0_summary_all.md (all 118 rows) |
 

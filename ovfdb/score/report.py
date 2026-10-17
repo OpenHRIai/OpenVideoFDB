@@ -67,12 +67,12 @@ MODEL_NAMES: dict[tuple[str, str], str] = {
     ("openai_realtime", "gpt-realtime"): "OpenAI gpt-realtime",
     ("openai_realtime", "gpt-realtime-mini"): "OpenAI gpt-realtime-mini",
     ("tavus", ""): "Tavus Griffin Lite",
-    ("tavus_cvi", ""): "Tavus CVI (Phoenix-4.5, tavus-gemma-4)",
-    ("anam", ""): "Anam (Cara-4, Gemini 3 Flash)",
+    ("tavus_cvi", ""): "Tavus CVI, cascaded (Phoenix-4.5, tavus-gemma-4)",
+    ("anam", ""): "Anam, cascaded (Cara-4, Gemini 3 Flash)",
 }
 #: What the agent emits: "A" (audio only) or "AV" (audio + video). The human partner and the
 #: mismatched-partner baseline are real people on camera, so AV. `tavus_cvi` runs with --mode av
-#: (AV2AV, full-duplex avatar); `anam` with --mode a2a (A2AV, cascaded speech-to-avatar).
+#: (AV2AV: Tavus's own cascaded CVI pipeline sees the user video); `anam` with --mode a2a (A2AV, cascaded).
 OUTPUT_MODALITY: dict[str, str] = {
     "human_gt": "AV", "random": "AV", "gemini_live": "A", "openai_realtime": "A",
     "tavus": "AV", "tavus_cvi": "AV", "anam": "AV", "keyframe": "AV",
@@ -81,7 +81,7 @@ OUTPUT_MODALITY: dict[str, str] = {
 SETTING_GROUPS: list[tuple[str, str]] = [
     ("REF", "Human reference"),
     ("RANDOM", "Random baseline"),
-    ("AV2AV", "Full-duplex AV2AV avatars"),
+    ("AV2AV", "Avatars with video in (AV2AV; full-duplex or cascaded, see model name)"),
     ("AV2A", "Full-duplex speech-vision (AV2A)"),
     ("A2A", "Audio-only baselines (A2A; same agents, video withheld)"),
     ("A2AV", "Cascaded speech-to-avatar (A2AV)"),

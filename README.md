@@ -26,8 +26,8 @@ evaluation code or official scorer. This repository provides:
 Status (2026-10-16): the pipeline reproduces the paper's human-reference numbers on the
 NVIDIA test split where that is computable, and the two API models land within 0.25
 overall of the project page on the full 226-row test split (both AV2A and A2A). The
-generation (video-out) judge is implemented and run on the human reference and on a
-Tavus CVI avatar. See *Results* and *Status* below.
+generation (video-out) judge is implemented and run on the human reference and on two
+cascaded avatar pipelines (Tavus CVI, Anam). See *Results* and *Status* below.
 
 ## Results
 
@@ -72,13 +72,16 @@ NV Cue Approp. / Overall. The human reference exists for the 30 rows with a part
 |---|---|---|---|---|---|---|---|---|
 | Human reference | AV2AV | 30 | 4.17 | 3.30 | 3.00 | 3.49 | — | 3.92 / 78 % / 900 ms |
 | Random baseline | AV2AV | 121 | 2.17 | 1.77 | 0.97 | 1.63 | 31 % / 0 ms | — |
-| Tavus CVI (Phoenix-4.5 + tavus-gemma-4, cascaded) | AV2AV | 121 | 3.79 | 2.30 | 1.65 | 2.63 | 31 % / 1956 ms | cascaded rows 2.80 / 2.39 |
+| Tavus CVI, cascaded (Phoenix-4.5 + tavus-gemma-4) | AV2AV | 121 | 3.79 | 2.30 | 1.65 | 2.63 | 31 % / 1956 ms | (Griffin Lite, full-duplex: 3.83 / 63 % / 1892 ms) |
+| Anam, cascaded (Cara-4 + Gemini 3 Flash) | A2AV | 121 | 3.41 | 1.51 | 1.26 | 2.15 | 44 % / 2092 ms | Gemini 2.5 + Anam: 2.80 / 44 % / 2840 ms |
 
-Tavus CVI here is Tavus's hosted cascaded pipeline, not the paper's full-duplex Tavus Griffin
-Lite (3.83). Its visual channel never produces a laugh, nod or smile inside a window (NV Cue
-0.00 on Laughter and Nonverbal Backchanneling), which reproduces the paper's finding that
-cascaded avatars cannot insert nonverbal cues during the user's turn. Anam (A2AV) is wired
-up but waits on plan minutes.
+Both avatars are the vendors' hosted cascaded pipelines (STT → LLM → TTS → lip-synced
+renderer); Tavus CVI additionally sees the user's camera. Neither produces a laugh, nod or
+smile inside a window (NV Cue 0.00 on all Laughter and Nonverbal Backchanneling rows),
+which reproduces the paper's finding that cascaded avatars cannot insert nonverbal cues
+during the user's turn. Fluency, cue and timing match the paper's cascaded rows; Dyadic
+Affect runs lower for every configuration including the human reference (judge-side offset,
+see the notes).
 
 **Open Seamless-derived set, 60 day-1 rows** (`results/v0_summary.md`, manifest v0):
 

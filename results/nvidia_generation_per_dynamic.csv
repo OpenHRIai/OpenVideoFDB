@@ -12,10 +12,17 @@ random,Random baseline (mismatched partner),AV2AV,RANDOM,random,av,,Pause Handli
 random,Random baseline (mismatched partner),AV2AV,RANDOM,random,av,,Turn-taking,15,,,,0,,,,0,,,,0,,,,0,93.33333333333333,80.0,100.0,15,0.0,0.0,0.0,14
 random,Random baseline (mismatched partner),AV2AV,RANDOM,random,av,,Verbal Backchanneling,16,,,,0,,,,0,,,,0,,,,0,0.0,0.0,0.0,16,22732.0,22732.0,22732.0,1
 random,Random baseline (mismatched partner),AV2AV,RANDOM,random,av,,Verbal Interruption,23,,,,0,,,,0,,,,0,,,,0,13.043478260869565,0.0,26.08695652173913,23,4676.0,1188.0,18772.0,10
-tavus_av2av,"Tavus CVI (Phoenix-4.5, tavus-gemma-4)",AV2AV,AV2AV,tavus_cvi,av,tavus-cvi/r213e42b45b3,Emotion Matching,13,,,,0,,,,0,,,,0,,,,0,,,,0,,,,0
-tavus_av2av,"Tavus CVI (Phoenix-4.5, tavus-gemma-4)",AV2AV,AV2AV,tavus_cvi,av,tavus-cvi/r213e42b45b3,Face Emotion Display,48,,,,0,,,,0,,,,0,,,,0,,,,0,,,,0
-tavus_av2av,"Tavus CVI (Phoenix-4.5, tavus-gemma-4)",AV2AV,AV2AV,tavus_cvi,av,tavus-cvi/r213e42b45b3,Laughter,14,,,,0,,,,0,,,,0,,,,0,,,,0,,,,0
-tavus_av2av,"Tavus CVI (Phoenix-4.5, tavus-gemma-4)",AV2AV,AV2AV,tavus_cvi,av,tavus-cvi/r213e42b45b3,Nonverbal Backchanneling,16,,,,0,,,,0,,,,0,,,,0,,,,0,,,,0
-tavus_av2av,"Tavus CVI (Phoenix-4.5, tavus-gemma-4)",AV2AV,AV2AV,tavus_cvi,av,tavus-cvi/r213e42b45b3,Turn-taking,15,,,,0,,,,0,,,,0,,,,0,100.0,100.0,100.0,15,1876.0,1524.0,2228.0,15
-tavus_av2av,"Tavus CVI (Phoenix-4.5, tavus-gemma-4)",AV2AV,AV2AV,tavus_cvi,av,tavus-cvi/r213e42b45b3,Verbal Backchanneling,16,,,,0,,,,0,,,,0,,,,0,0.0,0.0,0.0,16,,,,0
-tavus_av2av,"Tavus CVI (Phoenix-4.5, tavus-gemma-4)",AV2AV,AV2AV,tavus_cvi,av,tavus-cvi/r213e42b45b3,Verbal Interruption,23,,,,0,,,,0,,,,0,,,,0,8.695652173913043,0.0,21.73913043478261,23,2180.0,1708.0,2572.0,11
+tavus_av2av,"Tavus CVI, cascaded (Phoenix-4.5, tavus-gemma-4)",AV2AV,AV2AV,tavus_cvi,av,tavus-cvi/r213e42b45b3,Emotion Matching,13,,,,0,,,,0,,,,0,,,,0,,,,0,,,,0
+tavus_av2av,"Tavus CVI, cascaded (Phoenix-4.5, tavus-gemma-4)",AV2AV,AV2AV,tavus_cvi,av,tavus-cvi/r213e42b45b3,Face Emotion Display,48,,,,0,,,,0,,,,0,,,,0,,,,0,,,,0
+tavus_av2av,"Tavus CVI, cascaded (Phoenix-4.5, tavus-gemma-4)",AV2AV,AV2AV,tavus_cvi,av,tavus-cvi/r213e42b45b3,Laughter,14,,,,0,,,,0,,,,0,,,,0,,,,0,,,,0
+tavus_av2av,"Tavus CVI, cascaded (Phoenix-4.5, tavus-gemma-4)",AV2AV,AV2AV,tavus_cvi,av,tavus-cvi/r213e42b45b3,Nonverbal Backchanneling,16,,,,0,,,,0,,,,0,,,,0,,,,0,,,,0
+tavus_av2av,"Tavus CVI, cascaded (Phoenix-4.5, tavus-gemma-4)",AV2AV,AV2AV,tavus_cvi,av,tavus-cvi/r213e42b45b3,Turn-taking,15,,,,0,,,,0,,,,0,,,,0,100.0,100.0,100.0,15,1876.0,1524.0,2228.0,15
+tavus_av2av,"Tavus CVI, cascaded (Phoenix-4.5, tavus-gemma-4)",AV2AV,AV2AV,tavus_cvi,av,tavus-cvi/r213e42b45b3,Verbal Backchanneling,16,,,,0,,,,0,,,,0,,,,0,0.0,0.0,0.0,16,,,,0
+tavus_av2av,"Tavus CVI, cascaded (Phoenix-4.5, tavus-gemma-4)",AV2AV,AV2AV,tavus_cvi,av,tavus-cvi/r213e42b45b3,Verbal Interruption,23,,,,0,,,,0,,,,0,,,,0,8.695652173913043,0.0,21.73913043478261,23,2180.0,1708.0,2572.0,11
+anam_a2av,"Anam, cascaded (Cara-4, Gemini 3 Flash)",A2AV,A2AV,anam,a2a,anam/edf6fdcb/27cbd128,Emotion Matching,13,,,,0,,,,0,,,,0,,,,0,,,,0,,,,0
+anam_a2av,"Anam, cascaded (Cara-4, Gemini 3 Flash)",A2AV,A2AV,anam,a2a,anam/edf6fdcb/27cbd128,Face Emotion Display,48,,,,0,,,,0,,,,0,,,,0,,,,0,,,,0
+anam_a2av,"Anam, cascaded (Cara-4, Gemini 3 Flash)",A2AV,A2AV,anam,a2a,anam/edf6fdcb/27cbd128,Laughter,14,,,,0,,,,0,,,,0,,,,0,,,,0,,,,0
+anam_a2av,"Anam, cascaded (Cara-4, Gemini 3 Flash)",A2AV,A2AV,anam,a2a,anam/edf6fdcb/27cbd128,Nonverbal Backchanneling,16,,,,0,,,,0,,,,0,,,,0,,,,0,,,,0
+anam_a2av,"Anam, cascaded (Cara-4, Gemini 3 Flash)",A2AV,A2AV,anam,a2a,anam/edf6fdcb/27cbd128,Turn-taking,15,,,,0,,,,0,,,,0,,,,0,100.0,100.0,100.0,15,5148.0,4148.0,6164.0,15
+anam_a2av,"Anam, cascaded (Cara-4, Gemini 3 Flash)",A2AV,A2AV,anam,a2a,anam/edf6fdcb/27cbd128,Verbal Backchanneling,16,,,,0,,,,0,,,,0,,,,0,0.0,0.0,0.0,16,,,,0
+anam_a2av,"Anam, cascaded (Cara-4, Gemini 3 Flash)",A2AV,A2AV,anam,a2a,anam/edf6fdcb/27cbd128,Verbal Interruption,23,,,,0,,,,0,,,,0,,,,0,39.130434782608695,17.391304347826086,60.869565217391305,23,1400.0,1156.0,1852.0,16

@@ -45,7 +45,10 @@ from ovfdb.harness.base import AudioOut, Mode
 
 log = logging.getLogger("ovfdb.avatar")
 
-_QUOTA_RE = re.compile(r"usage limit|concurrency limit|upgrade your plan|insufficient|credit|quota|exceeded your", re.IGNORECASE)
+_QUOTA_RE = re.compile(r"usage limit|insufficient|credit|quota|exceeded your", re.IGNORECASE)
+_BUSY_RE = re.compile(r"concurrency limit", re.IGNORECASE)      # previous session not yet released: retry
+BUSY_RETRY_S = 25.0
+BUSY_RETRIES = 4
 
 
 class VendorQuotaError(RuntimeError):
@@ -253,9 +256,29 @@ class PlaywrightAvatar:
 
     # -- Agent protocol --
     async def start(self, system_prompt: str, mode: Mode, *, agent_speaks_first: bool = False) -> None:
-        from playwright.async_api import async_playwright
         clip_s = _wav_seconds(self.sample.user_audio_path)
         max_s = clip_s + 60.0
+        for attempt in range(BUSY_RETRIES + 1):
+            try:
+                await self._start_once(system_prompt, max_s, agent_speaks_first)
+                return
+            except RuntimeError as e:
+                if attempt < BUSY_RETRIES and _BUSY_RE.search(str(e)):
+                    log.warning("%s: vendor busy (%s); retry %d in %.0fs", self.name, str(e)[:80], attempt + 1, BUSY_RETRY_S)
+                    await self._teardown(keep_session=False)
+                    self._reset()
+                    await asyncio.sleep(BUSY_RETRY_S)
+                    continue
+                raise
+
+    def _reset(self) -> None:
+        self._ready = asyncio.Event()
+        self._stopped = asyncio.Event()
+        self._ws = None
+        self.errors = []
+
+    async def _start_once(self, system_prompt: str, max_s: float, agent_speaks_first: bool) -> None:
+        from playwright.async_api import async_playwright
         join = await self._session.create(system_prompt, max_s, agent_speaks_first)
         http_port = self._serve_http()
         ws_port = _free_port()
@@ -321,9 +344,10 @@ class PlaywrightAvatar:
         finally:
             await self._teardown()
 
-    async def _teardown(self) -> None:
-        with contextlib.suppress(Exception):
-            await self._session.end()
+    async def _teardown(self, keep_session: bool = False) -> None:
+        if not keep_session:
+            with contextlib.suppress(Exception):
+                await self._session.end()
         with contextlib.suppress(Exception):
             if self._browser:
                 await self._browser.close()

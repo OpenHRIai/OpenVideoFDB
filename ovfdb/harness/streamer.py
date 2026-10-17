@@ -292,13 +292,15 @@ PROVIDERS: dict[str, Callable[[Sample, list[Sample], str], Agent]] = {
 
 def run_manifest(manifest: str | Path, provider: str, mode: str = "av", out: str | Path = "",
                  limit: int = 0, concurrency: int = 1, model: str = "", tail_s: float = DEFAULT_TAIL_S,
-                 fps: float = DEFAULT_FRAME_FPS, bucket: str = "", partner_video_first: bool = False) -> list[AgentRun]:
+                 fps: float = DEFAULT_FRAME_FPS, bucket: str = "", partner_video_first: bool = False,
+                 shard: tuple[int, int] | None = None) -> list[AgentRun]:
     """Stream every clip of `manifest` through `provider`; write runs/<out>/<clip_id>/{agent.wav,run.json,events.jsonl}.
 
     Clips whose run.json already exists are skipped (resumable). `model` is passed to the
     provider (Gemini model id; seed for `random`). `bucket` restricts to rows of that bucket and
     `partner_video_first` runs rows with a human-reference video first (both keep the full
-    manifest's run-dir naming so scoring with the same manifest finds the dirs).
+    manifest's run-dir naming so scoring with the same manifest finds the dirs). `shard=(i, n)` takes every
+    n-th row starting at i, for running several vendor accounts side by side.
     """
     if provider not in PROVIDERS:
         raise ValueError(f"unknown provider {provider!r}; known: {sorted(PROVIDERS)}")
@@ -311,6 +313,8 @@ def run_manifest(manifest: str | Path, provider: str, mode: str = "av", out: str
     todo = [s for s in samples if not bucket or s.bucket.value == bucket]
     if partner_video_first:
         todo.sort(key=lambda s: 0 if s.partner_video_path else 1)
+    if shard:
+        todo = todo[shard[0]::shard[1]]       # (i, n): every n-th row starting at i, for parallel accounts
     todo = todo[:limit] if limit else todo
     out_dir = Path(out or f"runs/{provider}_{mode}")
     out_dir.mkdir(parents=True, exist_ok=True)
