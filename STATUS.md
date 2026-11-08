@@ -77,6 +77,14 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   conversations, tracks not extracted) and train (1,000; 374 stranger pairs); CANDOR has no untouched conversations,
   only ~98k unsampled turn ends, so a split-half design is proposed. **Correction:** Seamless test is mostly familiar
   pairs (53 of 67 conversations), not strangers as the findings file said; fixed there and in `cue_timing.md`.
+- **Five no-new-data checks done 2026-11-09** (private repo `scripts/cue_checks.py`, hypotheses file §6; reports
+  `runs/{r2,candor}/cues/checks_*/checks.md`). (A) Matching turn ends and pauses on turn length changes nothing on
+  Seamless and removes ~40 % of CANDOR's early listener difference, none of the speaker's pre-end smile. (B) CANDOR's
+  readiness posture is not backchannel residue (stronger with the listener silent ≥ 3 s: d 0.31 → 0.40); a third of it
+  is a smile. (C) The pre-end smile holds where a word ends at the offset (d 0.23), so not only laughter. (D) Speaker
+  and listener faces are near independent within an event (|ρ| ≤ 0.1, no lead): the yield-triggers-start idea has no
+  support. (E) The mouth ramp is specific to turn starts: ~0.8–1.6 s before a turn, 0.1–0.5 s before a backchannel —
+  relevant to metric 1 (an agent whose mouth opens only at onset reads as backchannelling).
 - **Next:** (1) the remaining bid-study analyses on CANDOR (abandoned bids, slices by quality flags / know-your-partner,
   backchannels) and the words-in-last-second split of CANDOR's pre-end smile of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder
