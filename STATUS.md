@@ -70,6 +70,13 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   ramp is locked to its own onset (0.7–1.0 s ahead in every gap bin, both corpora), so it starts during the speaker's
   speech for gaps < 0.7 s and in the silence otherwise. Silence-vs-silence control (taker vs the speaker's own pauses):
   Seamless chance before the offset, 0.59 at +0.3 s, 0.66 at +1 s; CANDOR 0.61 a second before the offset, flat 0.64 after.
+- **Hypotheses register written 2026-11-09** (private repo `docs/hypotheses_cue_signalling.md`): 20 claims about visual cue
+  signalling (6 listener, 9 speaker, 5 cross-cutting), each with a prediction, a verdict per corpus and a fixed test for
+  data not yet looked at. Timed cues replicate on both corpora; every disagreement involves CANDOR's slow state, for
+  which talk type, relationship and medium (video call vs same room) compete. Confirmation data: Seamless dev (80
+  conversations, tracks not extracted) and train (1,000; 374 stranger pairs); CANDOR has no untouched conversations,
+  only ~98k unsampled turn ends, so a split-half design is proposed. **Correction:** Seamless test is mostly familiar
+  pairs (53 of 67 conversations), not strangers as the findings file said; fixed there and in `cue_timing.md`.
 - **Next:** (1) the remaining bid-study analyses on CANDOR (abandoned bids, slices by quality flags / know-your-partner,
   backchannels) and the words-in-last-second split of CANDOR's pre-end smile of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder
