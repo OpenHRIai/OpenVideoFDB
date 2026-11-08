@@ -43,7 +43,13 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   per conversation `meta.json`, the shipped stereo mp3 and thumbnail — everything a later cue measure might need, since the
   video is not kept. Expect ≈ 360 CPU-hours, ≈ 1.5 h wall-clock, ≈ 100 GB FLAC + 50 GB mp3 + 60 GB tracks on the volume.
   Fetch with `modal volume get candor proc data/candor/proc_modal` (too big for the laptop; pull subsets or analyse on Modal).
-- **Next:** (1) when the run finishes, check `/vol/logs/*.json` for errors, then analyses 1–5 of the bid study on the whole corpus
+- **WS10 phase 0 done 2026-11-08:** `ovfdb/score/cues.py` (metrics §3 as pure functions, event mining with the WS9 rules,
+  `tests/test_cues.py`), `lanes.py` probe pass (rotation + per-file face crop; Seamless is full-body and lost the face on
+  43/157 files before). **Gate proxy on Seamless test** (private repo `scripts/seamless_mp_gate.py`, `docs/seamless_mp_gate.md`,
+  MediaPipe lanes on the 157 local test videos under `data/seamless/lanes/test/`): start-cue AUC 0.598 at −0.3 s / 0.642 at the
+  onset (shuffled 0.538), yield-cue 0.544 (chance; −1 s shift identical). Start cue within reach of a sequence model, yield cue
+  is a negative result; extractor choice settled (MediaPipe). Spec §1b updated.
+- **Next:** (1) when the CANDOR run finishes, check `/vol/logs/*.json` for errors, then analyses 1–5 of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder
   here (`ovfdb/score/cues.py` metrics with synthetic-track tests, face-found rate + AV offset table on the avatar runs);
   (3) decide whether the WS10 judge trains on CANDOR (commercial) instead of Seamless (NC) — spec §2 licence line.

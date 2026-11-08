@@ -106,6 +106,18 @@ leave-one-conversation-out bid score reaches AUC 0.61 at the onset (0.54 / 0.53 
 Licence consequence: CANDOR permits commercial use and sharing Models trained on it (with notice, no redistribution of
 tracks, 30-day removals), so a judge trained on CANDOR could ship without the NC restriction in §2.
 
+**Gate proxy on Seamless test with the open extractor (2026-11-08; private repo `scripts/seamless_mp_gate.py`,
+report `docs/seamless_mp_gate.md`).** The phase-1 gate numbers measured with the bid study's plain model (logistic on
+3 s rolling mean + slope of the MediaPipe lanes, leave-one-conversation-out) on the 157 local test videos, before any
+sequence model exists: start-cue AUC 0.598 [0.56, 0.64] at −0.3 s and 0.642 [0.60, 0.69] at the onset, shuffled-video
+control 0.538; yield-cue AUC 0.544 [0.51, 0.57], shuffled 0.487, and the track shifted 1 s into the past gives the same
+0.544 — the speaker's face in the last second carries no offset signal with these features. Both miss the letter of
+gate 1 with the proxy; the start cue is within reach of a GRU, the yield cue is not. Per-feature d-tables on the same
+files reproduce the Meta-feature findings (mouth from −1 s, d 0.54 at −0.3 s on the inner-lip gap, nothing at −2 s,
+head/gaze small), so the extractor-agreement question of phase 2 is settled in favour of MediaPipe. Required an
+extractor fix: Seamless is filmed full-body and the face was lost on 43 of 157 files until `lanes.py` gained a per-file
+probe for rotation and a face crop (mean found rate 0.79 → 0.98).
+
 ## 2. Model
 
 One backbone, three modes, trained with modality dropout so audio-only, visual-only and audio-visual scores
@@ -202,11 +214,11 @@ local (results publishable, frames not).
 ## 5. Phases, gates, estimates
 
 **Phase 0 — metrics and extraction scaffolding (1–2 days, this repo, no training).**
-- `ovfdb/score/lanes.py`: MediaPipe Face Landmarker at 10 fps on any mp4 (one face box per file as in the
+- **Done 2026-11-07/08 (probe/crop for full-body video, `frames.npz` extras added 11-08):** `ovfdb/score/lanes.py`: MediaPipe Face Landmarker at 10 fps on any mp4 (one face box per file as in the
   WS9 builder; reuse `fugubook/avatar-bench/extract_lanes.py` for blendshapes, head pose, gaze proxy,
   mouth openness, `av_sync_offset_ms`). Output `face.npy` (T, 64) + `face.json` (fps, box, found-rate).
   Dependency behind the existing `lanes` extra; `face_landmarker.task` fetched to `data/models/`.
-- `ovfdb/score/cues.py`: event mining on `AgentRun` + user segments (WS9 rules with A/B = agent/user),
+- **Done 2026-11-08:** `ovfdb/score/cues.py`: event mining on `AgentRun` + user segments (WS9 rules with A/B = agent/user),
   metrics 1–6 from probability tracks, bootstrap CIs. Unit tests on synthetic tracks (a track that rises
   300 ms before every complete must give horizon 300 and AUC 1.0; a flat track gives 0 and 0.5; shuffled
   control at chance).
@@ -233,7 +245,7 @@ partner-face branch and measure 3b.
   speaker-face gain was +0.016 eager AUC).
 
 **Phase 2 — the judge that runs on avatar video (3–5 days).**
-- Extractor agreement on the 157 local test videos: correlation of MediaPipe blendshapes / head pose with
+- *(settled 2026-11-08 by the gate proxy above: MediaPipe reproduces the Meta-feature findings on the same files)* Extractor agreement on the 157 local test videos: correlation of MediaPipe blendshapes / head pose with
   Meta's FAUValue / head_encodings / gaze_encodings per frame; pick MediaPipe or OpenFace by agreement and
   CPU cost. Open question from the design doc (§8) settled here.
 - Decision point: (a) if a linear map from open features to the oracle's 31-d reproduces the phase-1
