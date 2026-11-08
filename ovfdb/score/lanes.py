@@ -309,11 +309,16 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--start", type=float, default=None)
     ap.add_argument("--end", type=float, default=None)
     ap.add_argument("--no-sync", action="store_true")
+    ap.add_argument("--extras", action="store_true", help="also write frames.npz (frame times, luma/blur, landmark subset)")
+    ap.add_argument("--skip-existing", action="store_true")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     for v in a.videos:
         out = a.out if len(a.videos) == 1 else a.out / v.stem
-        m = extract(v, out, fps=a.fps, model=a.model, max_width=a.max_width, sync=not a.no_sync, start_s=a.start, end_s=a.end)
+        if a.skip_existing and (out / "face.json").exists():
+            continue
+        m = extract(v, out, fps=a.fps, model=a.model, max_width=a.max_width, sync=not a.no_sync, start_s=a.start, end_s=a.end,
+                    extras=a.extras)
         log.info("%s: %d rows, found %.1f%%, sync %s ms, %.0fs", v.name, m["n_rows"], 100 * m["found_rate"],
                  m.get("av_sync_offset_ms"), m["seconds"])
 
