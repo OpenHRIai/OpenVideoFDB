@@ -54,6 +54,8 @@ Appropriateness). Full details: `docs/protocol.md`.
 | WS6 | More providers: OpenAI Realtime; Tavus/Anam via Playwright; generation judge | `plans/WS6-providers-avatar.md` | WS3, WS5 | 4–6 h |
 | WS7 | NVIDIA dataset adapter (gated) | `plans/WS7-nvidia-adapter.md` | WS0 | 1 h |
 | WS8 | Report table, README, HF manifest publish | `plans/WS8-report-publish.md` | all | 2 h |
+| WS9 | Seamless end-of-turn (endpointing) set: outcome rules, builder, SmartTurn eval | `plans/WS9-endpointing.md` (only on branch `ws9-endpointing-private`, not on main) | WS1 | done |
+| WS10 | Cue judge: turn-taking predictor scoring the agent's own yield / start cues (new generation dimension) | `plans/WS10-cue-judge.md` | WS9, WS6b | 8–12 d |
 
 Parallelisable from the start: WS1, WS3, WS4, WS7 (independent). WS2 needs WS1;
 WS5 needs WS4's segment format; WS6 needs WS3+WS5; WS8 last.

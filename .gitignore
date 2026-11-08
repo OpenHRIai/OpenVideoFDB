@@ -36,3 +36,6 @@ build/
 manifest/nvidia_*.jsonl
 .tavus_persona
 .heygen_context
+
+# per-session worktree copies made by the Claude app
+.claude/worktrees/

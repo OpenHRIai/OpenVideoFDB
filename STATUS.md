@@ -12,6 +12,27 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   `score/pipeline.iter_rows`; `report` is unaffected (it reads clip_id from timing.json).
 - 2026-10-15 — `harness/base.py`: `AudioOut` gained `flush: bool = False` (barge-in: drop queued-unplayed audio at `t_received`; maps Gemini `server_content.interrupted`). Providers stamp `t_received` on their own clock (t=0 at first `push_audio`); streamer re-stamps on drain, keeps provider value as `t_agent` in events. (WS3)
 
+## HANDOFF 2026-11-08 (session 6, 2026-10-24 → 11-08) — WS10 planned, bid study done
+- **WS10 cue judge** (`plans/WS10-cue-judge.md`, new): a turn-taking predictor trained on human-human Seamless video,
+  used as an automatic judge of the *agent's own* turn signalling — yield cues as speaker, start cues (floor bids) as
+  listener — scored audio-only / visual-only / audio-visual from one backbone with modality dropout. New
+  generation-side dimension, not in the paper. Depends on WS9 and the R2 pipeline in `smart-turn-multimodal-private`.
+  Kill gate after phase 1 (visual-only AUC ≥ 0.60 on Seamless test). Phases 0–3 not started.
+- **Phase 1a, the Seamless floor-bid study, is done** in `~/susurobo/code/smart-turn-multimodal-private`, branch
+  `r2-floor-bids` (4 commits, **not pushed**, not merged): `docs/r2_floor_bids.md` (summary at top, §7 = the
+  any-pause hazard follow-up), 33 figures, `scripts/r2_bids_*.py`. Headline: listeners prepare visibly in the last
+  1.5 s before speaking (mouth from −1.6 s, head/gaze motion and blink from −0.9 s, nothing at −2 s); that
+  preparation has no measurable effect on the speaker (turn ends +0.003 AUC; pauses of any kind at chance). Face
+  features exist for site V00 only. The spec's §1b carries the numbers and the decisions they fixed (horizons 0.4 /
+  1 s; partner-face branch and bid-effect measure dropped).
+- **Uncommitted in this checkout:** `plans/WS10-cue-judge.md` (new), `PLAN.md` (WS9 + WS10 rows), `STATUS.md`.
+  WS9 (end-of-turn set) is still only on branch `ws9-endpointing-private`; `main` has no WS9 row on the board by the
+  maintainer's choice (SmartTurn probe results stay unpublished until the model improves).
+- **Next:** WS10 phase 0 here (`ovfdb/score/lanes.py` MediaPipe tracks at 10 fps, `ovfdb/score/cues.py` metrics with
+  synthetic-track tests, face-found rate + AV offset on the avatar runs), then phase 1 in the private repo
+  (`p_start(h)` heads on the R2 tracks, gate). Independent of WS10, the earlier "Next" list (Tavus perception rows,
+  second judge, Seamless v1 model runs) still stands.
+
 ## HANDOFF 2026-10-17 (end of session 3) — read this first
 **v0.1.0 is released** (GitHub `OpenHRIai/OpenVideoFDB` + tag/release, HF dataset `OpenHRI/open-videofdb`).
 Remotes in this checkout: `origin` = susurobo/OpenVideoFDB, `openhri` = OpenHRIai/OpenVideoFDB — **push both**.
@@ -171,6 +192,7 @@ Re-running: `ovfdb run` is resumable (skips dirs with run.json); a connection dr
 | WS5 judge + calibration | done (payload v2 calibrated) | session 2 | 2026-10-16 | rubrics verbatim, judge (gpt-4o/claude/gemini backends), report w/ bootstrap CIs. Payload v2: GT 4.12 vs random 2.70; results/calibration_v2.md. ≈$0.013/row-axis |
 | WS6 providers: OpenAI RT, Tavus/Anam/HeyGen, gen judge | **done** (6a, 6b Tavus + Anam + HeyGen on the 121 generation rows, 6c) | session 3 (+ agent for 6c) | 2026-10-17 | `results/nvidia_test.md` (Generation section): gt 4.17/3.30/3.00/3.49 (paper 3.92), random 1.63, **Tavus CVI 3.79/2.30/1.65/2.63** (31 %/1956 ms), **Anam 3.41/1.51/1.26/2.15** (44 %/2092 ms; paper Gemini 2.5+Anam 2.80, 44 %/2840), **HeyGen 4.16/2.33/1.52/2.74** (39 %/1800 ms). Judge `score-generation` (gpt-4o vision, F.6 rubrics, ≈$0.26/row). Harness `playwright_avatar.py` + `web/avatar.html` (`run_manifest(bucket, partner_video_first, shard)`). Not run: Tavus perception rows (Table 1 AV2AV) |
 | WS7 NVIDIA adapter + test-split runs | done | session 3 | 2026-10-16 | loader, gt/random, and the 4 API-model configs on all 226 test rows scored + reported: `results/nvidia_test.md`. Generation judge (WS6c) still todo |
+| WS10 cue judge | planned (spec written) | session 6 | 2026-10-26 | `plans/WS10-cue-judge.md`: visual turn-taking predictor as a judge of the agent's own yield/start cues. Phase 1 gate first: visual-only AUC ≥ 0.60 on Seamless test (the R2 oracle gained only +0.016 eager AUC, so this may close with a negative result). Training in `smart-turn-multimodal-private` (R2 tracks on Modal); this repo gets `score/lanes.py`, `score/cues.py`, `score/cue_judge.py`, `score-cues`. **Phase 1a (bid study, §1b) done 2026-10-27** in `smart-turn-multimodal-private`, branch `r2-floor-bids` (4 commits, not pushed), report `docs/r2_floor_bids.md`: listeners bid visibly but late (mouth from −1.6 s, head/gaze motion and blink from −0.9 s; nothing at −2 s); bid effect on the speaker's offset ≈ 0 (+0.003 AUC) and on pauses of any kind ≈ 0 (bid score at chance 0.49–0.52, risk ratio ≈ 1; report §7); face features exist for site V00 only. For WS10: keep h = 0.4 / 1 s, drop h = 4 s; expect measure 3b ≈ 0 |
 | WS8 report + publish | results tables done; README/publish todo | session 2 | 2026-10-16 | results/v0_summary.md (day-1 rows), results/v0_summary_all.md (all 118 rows) |
 
 ## Decisions log
