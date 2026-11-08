@@ -61,7 +61,7 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   marker, d 0.27), 0.68 within 300 ms after (jaw closes and lips press, smile, gaze/head settle, blinks drop; a pause keeps the
   jaw half open). Spec §3 gained metric 2b (yield-at-offset) and §1b the summary. To replicate on CANDOR: wire the packed
   tracks into `eot/candor.py` (face16 + VAD from the npz; words from the local AWS zip) and run the same script.
-- **Onset + offset analyses on both corpora done 2026-11-08** (private repo `docs/cue_timing.md`; scripts `cue_corpus.py`,
+- **Onset + offset analyses on both corpora done 2026-11-08** (private repo `docs/cue_timing.md`, per-dataset paper-style summary `docs/findings_cue_timing.md`; scripts `cue_corpus.py`,
   `cue_onset.py`, `cue_offset.py`; CANDOR events `runs/candor/bids/events_all.jsonl`, 1.07 M rows, 112,950 ends). Start-cue
   gate passes on both (0.62 Seamless / 0.70 CANDOR at −0.3 s, shuffled 0.50); yield signal in the first 300 ms after the
   offset on both; head stillness precedes pauses on both (hold cue); post-offset signals are the speaker's own. CANDOR adds a
