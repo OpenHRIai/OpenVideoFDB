@@ -32,12 +32,13 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   Face Landmarker at 10 Hz → `face.npy` (T, 66) + `face.json` with found rate and `av_sync_offset_ms`; ≈ 25× real time on
   the laptop, 100 % faces on the avatar clips), `scripts/candor_prep.py` (archive → per-participant 16 kHz audio, Silero
   VAD, face tracks under `data/candor/proc/<conv>/<uid>/`), `scripts/candor_modal.py` (one container per archive on the
-  Modal volume `candor`, video never stored). Pilot on archive 034 (6 conversations, 5 usable, 256 onsets): the Seamless
+  Modal volume `candor`, video never stored; tested 2026-11-08 on archive 034: 6/6 conversations, tracks match the local
+  pilot — commit `db663b4`, details in the script docstring; secret `huggingface` exists in the `susurobo` workspace). Pilot on archive 034 (6 conversations, 5 usable, 256 onsets): the Seamless
   bid-study headline reproduces with the open extractor on strangers at a different site — report
   `docs/candor_floor_bids.md` in `smart-turn-multimodal-private`, branch `candor-bids` (loaders `eot/candor.py`, scripts
   `scripts/candor_bids_*.py`). Local media: `data/candor/raw/processed_media_part_034/<conv>/processed/` (git-ignored).
 - **Next:** (1) full CANDOR extraction on Modal (`uv run --with modal modal run --detach scripts/candor_modal.py --archives all`,
-  ≈ 80 CPU-hours, ≈ 100 GB FLAC + 20 GB tracks on the volume), then analyses 1–5 of the bid study on the whole corpus
+  ≈ 360 CPU-hours on Modal's x86 cores, ≈ 1.5 h wall-clock, ≈ 100 GB FLAC + 20 GB tracks on the volume), then analyses 1–5 of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder
   here (`ovfdb/score/cues.py` metrics with synthetic-track tests, face-found rate + AV offset table on the avatar runs);
   (3) decide whether the WS10 judge trains on CANDOR (commercial) instead of Seamless (NC) — spec §2 licence line.
