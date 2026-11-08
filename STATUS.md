@@ -37,7 +37,14 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   bid-study headline reproduces with the open extractor on strangers at a different site — report
   `docs/candor_floor_bids.md` in `smart-turn-multimodal-private`, branch `candor-bids` (loaders `eot/candor.py`, scripts
   `scripts/candor_bids_*.py`). Local media: `data/candor/raw/processed_media_part_034/<conv>/processed/` (git-ignored).
-- **Full CANDOR extraction launched 2026-11-08 14:09 JST** (`modal run --detach scripts/candor_modal.py --archives all`, app
+- **Full CANDOR extraction done 2026-11-08 16:03 JST** (1 h 54 min, 34 containers, 1,656/1,656 conversations, no errors;
+  per-archive logs in `data/candor/logs_modal/`). Corpus on the Modal volume `candor` under `proc/`; the analysis set is
+  local: `data/candor/packed/<conversation_id>.npz` (9.5 GB, 1,656 files — float16 face tracks, VAD regions, face.json and
+  channel map per participant; `candor_modal.py::pack`). 3,308 face tracks (4 conversations ship one video) and 3,312 VAD
+  tracks, 1,940 h of video at 320 × 240 / 30 fps; face found median 0.970, mean 0.934, 664 videos < 0.9, 37 < 0.5, 7 < 0.1;
+  |AV offset| > 300 ms on 301 of 3,305 (mp4's own audio vs mouth — check self-alignment against the mp3-channel VAD before
+  trusting those). Four archives were retried by Modal mid-way, so their `logs` lack the per-video summary for 126
+  conversations whose tracks are nonetheless complete (verified from the packed files). Launch record: (`modal run --detach scripts/candor_modal.py --archives all`, app
   `ap-h4oNI1NQSMKC4NziAA4GNz` in the `susurobo` workspace; local log `data/candor/modal_all.log`). Writes per participant
   `audio16.flac`, `vad.json`, `face.npy`/`face.json` and `frames.npz` (frame times, luma/blur, 125-point landmark subset) and
   per conversation `meta.json`, the shipped stereo mp3 and thumbnail — everything a later cue measure might need, since the
@@ -49,7 +56,7 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   MediaPipe lanes on the 157 local test videos under `data/seamless/lanes/test/`): start-cue AUC 0.598 at −0.3 s / 0.642 at the
   onset (shuffled 0.538), yield-cue 0.544 (chance; −1 s shift identical). Start cue within reach of a sequence model, yield cue
   is a negative result; extractor choice settled (MediaPipe). Spec §1b updated.
-- **Next:** (1) when the CANDOR run finishes, check `/vol/logs/*.json` for errors, then analyses 1–5 of the bid study on the whole corpus
+- **Next:** (1) analyses 1–5 of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder
   here (`ovfdb/score/cues.py` metrics with synthetic-track tests, face-found rate + AV offset table on the avatar runs);
   (3) decide whether the WS10 judge trains on CANDOR (commercial) instead of Seamless (NC) — spec §2 licence line.
