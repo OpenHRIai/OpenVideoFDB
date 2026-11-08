@@ -139,8 +139,7 @@ def ensure_model(model: Path = DEFAULT_MODEL) -> Path:
         log.info("fetching %s", MODEL_URL)
         with httpx.stream("GET", MODEL_URL, follow_redirects=True, timeout=120) as r, open(model, "wb") as f:
             r.raise_for_status()
-            for chunk in r.iter_bytes():
-                f.write(chunk)
+            f.writelines(r.iter_bytes())
     return model
 
 
@@ -194,7 +193,7 @@ def extract(video: Path, out_dir: Path, *, fps: int = FPS, model: Path = DEFAULT
     out_dir.mkdir(parents=True, exist_ok=True)
     lmk = _landmarker(ensure_model(model))
     rows: dict[int, np.ndarray] = {}
-    meta: dict = dict(video=str(video), fps=fps, features=FEATURES, model=str(model))
+    meta: dict = {"video": str(video), "fps": fps, "features": FEATURES, "model": str(model)}
     with av.open(str(video)) as c:
         vs = c.streams.video[0]
         vs.thread_type = "AUTO"
@@ -220,7 +219,7 @@ def extract(video: Path, out_dir: Path, *, fps: int = FPS, model: Path = DEFAULT
                 continue
             last_k = k
             img = fr.reformat(width=w, height=h, format="rgb24").to_ndarray() if scale < 1.0 else fr.to_ndarray(format="rgb24")
-            res = lmk.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=np.ascontiguousarray(img)), int(round(k * 1000 / fps)))
+            res = lmk.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=np.ascontiguousarray(img)), round(k * 1000 / fps))
             rows[k] = frame_features(res)
     lmk.close()
     T = (last_k + 1) if last_k >= 0 else 0

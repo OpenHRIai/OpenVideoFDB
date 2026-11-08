@@ -33,7 +33,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from ovfdb.score import lanes, vad  # noqa: E402
+from ovfdb.score import lanes, vad
 
 log = logging.getLogger("candor_prep")
 RAW = Path("data/candor/raw")
@@ -108,14 +108,14 @@ def process_conversation(conv: Path, out_root: Path = PROC, *, fps: int = lanes.
     meta = json.loads((conv / "metadata.json").read_text())
     chans = channel_map(conv)
     mp3 = conv / "processed" / f"{cid}.mp3"
-    info: dict = dict(conversation_id=cid, channels=chans, metadata=meta, probe={})
+    info: dict = {"conversation_id": cid, "channels": chans, "metadata": meta, "probe": {}}
     info["probe"]["mp3"] = probe(mp3)
     wavs = split_audio(mp3, chans, out, audio_format)
     for uid, wav in wavs.items():
         vj = out / uid / "vad.json"
         if not vj.exists():
             r = vad.detect(wav, backend="silero")
-            vj.write_text(json.dumps(dict(backend=r.backend, error=r.error, regions=[[round(a, 3), round(b, 3)] for a, b in r.regions])))
+            vj.write_text(json.dumps({"backend": r.backend, "error": r.error, "regions": [[round(a, 3), round(b, 3)] for a, b in r.regions]}))
         mp4 = conv / "processed" / f"{uid}.mp4"
         if mp4.exists():
             info["probe"][uid] = probe(mp4)
@@ -150,7 +150,7 @@ def main() -> None:
     if a.conv:
         convs = [c for c in convs if c.name in set(a.conv)]
     log.info("%d conversations under %s", len(convs), root)
-    kw = dict(out_root=a.out, fps=a.fps, delete_video=a.delete_video, skip_face=a.skip_face, audio_format=a.audio_format)
+    kw = {"out_root": a.out, "fps": a.fps, "delete_video": a.delete_video, "skip_face": a.skip_face, "audio_format": a.audio_format}
     if a.workers <= 1:
         for c in convs:
             info = process_conversation(c, **kw)
