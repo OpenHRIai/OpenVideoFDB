@@ -4,6 +4,8 @@
     uv run --with modal modal run --detach scripts/candor_modal.py --archives all   # all 34 (≈ 1.5 h wall-clock)
     uv run --with modal modal volume get candor proc data/candor/proc_modal         # fetch the tracks (≈ 20 GB + audio)
     uv run --with modal modal volume get candor logs data/candor/logs_modal
+    uv run --with modal modal run scripts/candor_modal.py::pack                   # then: float16 tracks + VAD per conversation
+    uv run --with modal modal volume get candor packed data/candor/packed          # ≈ 7 GB, enough for every analysis
 
 Test on archive 034 (6 conversations, 2026-11-08): 6/6 done in 1172 s on 4 CPUs, i.e. ≈ 390 CPU-s per participant
 video on Modal's x86 cores (≈ 4× the Apple-silicon figure). Against the local pilot tracks: identical row counts,
@@ -92,6 +94,57 @@ def process_archive(part: str, audio_format: str = "flac") -> dict:
     log_path.write_text(json.dumps(summary, indent=1, default=str))
     volume.commit()
     return {k: v for k, v in summary.items() if k != "results"}
+
+
+@app.function(image=image, volumes={VOL: volume}, cpu=2, memory=4096, timeout=2 * 3600)
+def pack_tracks(convs: list[str]) -> dict:
+    """Bundle each conversation's analysis inputs into one ``/vol/packed/<conversation_id>.npz`` — face tracks as float16
+    (blendshapes in [0, 1], angles in degrees: nothing the study needs is lost), VAD regions, face.json and the channel
+    map — so the whole corpus can be fetched to a laptop (≈ 7 GB) without the audio, landmarks and mp3 (≈ 200 GB)."""
+    import json
+    from pathlib import Path
+
+    import numpy as np
+
+    out_dir = Path(VOL) / "packed"; out_dir.mkdir(parents=True, exist_ok=True)
+    done, skipped, errors = 0, 0, {}
+    for cid in convs:
+        dst = out_dir / f"{cid}.npz"
+        if dst.exists():
+            skipped += 1
+            continue
+        try:
+            d = Path(VOL) / "proc" / cid
+            meta = json.loads((d / "meta.json").read_text())
+            arrays: dict = {"meta": np.array(json.dumps({k: meta[k] for k in ("conversation_id", "channels", "face", "missing_video") if k in meta}))}
+            for uid in meta["channels"].values():
+                u = d / uid
+                if (u / "face.npy").exists():
+                    arrays[f"{uid}/face16"] = np.load(u / "face.npy").astype(np.float16)
+                    arrays[f"{uid}/face_json"] = np.array((u / "face.json").read_text())
+                if (u / "vad.json").exists():
+                    arrays[f"{uid}/vad"] = np.array(json.loads((u / "vad.json").read_text())["regions"], dtype=np.float32).reshape(-1, 2)
+            np.savez(dst, **arrays)
+            done += 1
+        except Exception as e:  # noqa: BLE001
+            errors[cid] = repr(e)
+    volume.commit()
+    return {"done": done, "skipped": skipped, "errors": errors}
+
+
+@app.local_entrypoint()
+def pack(limit: int = 0, chunk: int = 50):
+    """``modal run scripts/candor_modal.py::pack`` after the extraction: pack every conversation on the volume, then
+    ``modal volume get candor packed data/candor/packed``."""
+    convs = sorted(e.path.split("/")[-1] for e in volume.listdir("proc"))
+    if limit:
+        convs = convs[:limit]
+    chunks = [convs[i:i + chunk] for i in range(0, len(convs), chunk)]
+    print(f"{len(convs)} conversations in {len(chunks)} chunks")
+    tot = {"done": 0, "skipped": 0, "errors": {}}
+    for r in pack_tracks.map(chunks):
+        tot["done"] += r["done"]; tot["skipped"] += r["skipped"]; tot["errors"].update(r["errors"])
+    print(tot)
 
 
 @app.local_entrypoint()
