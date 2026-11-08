@@ -56,7 +56,12 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   MediaPipe lanes on the 157 local test videos under `data/seamless/lanes/test/`): start-cue AUC 0.598 at −0.3 s / 0.642 at the
   onset (shuffled 0.538), yield-cue 0.544 (chance; −1 s shift identical). Start cue within reach of a sequence model, yield cue
   is a negative result; extractor choice settled (MediaPipe). Spec §1b updated.
-- **Next:** (1) analyses 1–5 of the bid study on the whole corpus
+- **Yield timing answered 2026-11-08** (private repo `scripts/yield_timing.py`, `docs/yield_timing.md`, Seamless test): speakers
+  signal the end *after* the acoustic offset, not before — end-vs-pause AUC 0.57 in the last second (head motion the one early
+  marker, d 0.27), 0.68 within 300 ms after (jaw closes and lips press, smile, gaze/head settle, blinks drop; a pause keeps the
+  jaw half open). Spec §3 gained metric 2b (yield-at-offset) and §1b the summary. To replicate on CANDOR: wire the packed
+  tracks into `eot/candor.py` (face16 + VAD from the npz; words from the local AWS zip) and run the same script.
+- **Next:** (1) analyses 1–5 + yield timing on all of CANDOR (packed tracks local) of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder
   here (`ovfdb/score/cues.py` metrics with synthetic-track tests, face-found rate + AV offset table on the avatar runs);
   (3) decide whether the WS10 judge trains on CANDOR (commercial) instead of Seamless (NC) — spec §2 licence line.

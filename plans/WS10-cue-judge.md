@@ -118,6 +118,18 @@ head/gaze small), so the extractor-agreement question of phase 2 is settled in f
 extractor fix: Seamless is filmed full-body and the face was lost on 43 of 157 files until `lanes.py` gained a per-file
 probe for rotation and a face crop (mean found rate 0.79 → 0.98).
 
+**Yield timing (2026-11-08; private repo `scripts/yield_timing.py`, `docs/yield_timing.md`).** Do speakers signal the
+end visually before the acoustic offset or after it? Speaker's lanes from −3 to +2 s around 417 complete offsets vs
+1,883 incomplete pauses (frames after anyone speaks again masked) and 1,251 mid-turn frames, Seamless test. Before the
+offset a turn end and a pause look alike (end-vs-pause AUC 0.57 in the last second, the same with or without the mouth);
+the one early marker is head motion, raised before a turn end relative to a pause from −0.9 s (d 0.27 at −0.3 s; pauses
+are preceded by a still head). Within 300 ms after the offset they separate: AUC 0.68 at +0.3 s, 0.71 at +1 s (0.63 /
+0.65 without the mouth) — at a turn end the jaw closes fully and the lips press, a smile appears, gaze and head settle,
+blinks drop; in a pause the jaw stays half open in speaking posture with the gaze still moving. Consequences in §3:
+metric 2's pre-offset horizon is ≈ 0 for humans and is kept only as a secondary head-motion measure; the yield measure
+is the face at τ = 0.3–0.5 s into the silence telling an end from a pause (metric 4's hold-vs-yield question), human
+reference 0.68 (0.63 without the mouth).
+
 ## 2. Model
 
 One backbone, three modes, trained with modality dropout so audio-only, visual-only and audio-visual scores
@@ -168,9 +180,14 @@ Events come from the run's own channels with the WS9 outcome rules applied to (a
 Per run, per mode (A, V, AV), with conversation-level bootstrap CIs (clips as the resampling unit):
 
 1. **Yield-cue AUC** — `p_eager` at offset − 0.3 s on completes vs mid-turn negatives. Chance 0.5.
-2. **Yield horizon** — on completes, the earliest time before the acoustic offset at which `p_eager` stays
+2. **Yield horizon** *(2026-11-08: ≈ 0 for humans — see §1b yield timing; report it, but the headline yield measure is 2b)* — on completes, the earliest time before the acoustic offset at which `p_eager` stays
    above θ_eager until the offset; θ_eager fitted on Seamless human data for ≤ 10 % withdrawn signals.
    Report detection rate and median horizon (ms). Missed = 0.
+2b. **Yield-at-offset AUC** *(added 2026-11-08)* — the face in the first 0.3–0.5 s of the silence telling a complete
+   turn end from an incomplete pause (`p_end(τ)` at τ = 0.3 and 0.5 s, V mode, completes vs incompletes). Human reference
+   on Seamless test with the plain model: 0.68 at +0.3 s, 0.63 without the mouth features. For avatars this is the
+   hold-vs-yield question: a face that drops to a closed neutral mouth at every TTS phrase break signals "end" at pauses
+   it does not mean; one that keeps the speaking posture across a pause and closes only at the real end scores human.
 3. **Start-cue AUC(h)** — `p_start(0.4)` scored at onset − 0.3 s and `p_start(1)` at onset − 0.5 s, on
    agent onsets vs listening negatives. **Bid lead** — the earliest time before the onset at which
    `p_start(1 s)` stays above θ_bid (fitted on human data at 10 % false bids) until the onset; median and
