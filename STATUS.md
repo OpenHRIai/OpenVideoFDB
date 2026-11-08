@@ -61,7 +61,13 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   marker, d 0.27), 0.68 within 300 ms after (jaw closes and lips press, smile, gaze/head settle, blinks drop; a pause keeps the
   jaw half open). Spec §3 gained metric 2b (yield-at-offset) and §1b the summary. To replicate on CANDOR: wire the packed
   tracks into `eot/candor.py` (face16 + VAD from the npz; words from the local AWS zip) and run the same script.
-- **Next:** (1) analyses 1–5 + yield timing on all of CANDOR (packed tracks local) of the bid study on the whole corpus
+- **Onset + offset analyses on both corpora done 2026-11-08** (private repo `docs/cue_timing.md`; scripts `cue_corpus.py`,
+  `cue_onset.py`, `cue_offset.py`; CANDOR events `runs/candor/bids/events_all.jsonl`, 1.07 M rows, 112,950 ends). Start-cue
+  gate passes on both (0.62 Seamless / 0.70 CANDOR at −0.3 s, shuffled 0.50); yield signal in the first 300 ms after the
+  offset on both; head stillness precedes pauses on both (hold cue); post-offset signals are the speaker's own. CANDOR adds a
+  ≈ 1 s pre-end smile on social turns. Spec §1b/§3 updated.
+- **Next:** (1) the remaining bid-study analyses on CANDOR (abandoned bids, slices by quality flags / know-your-partner,
+  backchannels) and the words-in-last-second split of CANDOR's pre-end smile of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder
   here (`ovfdb/score/cues.py` metrics with synthetic-track tests, face-found rate + AV offset table on the avatar runs);
   (3) decide whether the WS10 judge trains on CANDOR (commercial) instead of Seamless (NC) — spec §2 licence line.

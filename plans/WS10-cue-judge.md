@@ -130,6 +130,19 @@ metric 2's pre-offset horizon is ≈ 0 for humans and is kept only as a secondar
 is the face at τ = 0.3–0.5 s into the silence telling an end from a pause (metric 4's hold-vs-yield question), human
 reference 0.68 (0.63 without the mouth).
 
+**Both sides on both corpora (2026-11-08, evening; private repo `scripts/cue_onset.py` / `cue_offset.py`, report
+`docs/cue_timing.md`).** Same extractor, same rules, Seamless test (417 ends, 1,883 pauses) and all of CANDOR (109,950
+ends, 12,000 used; 1,579 conversations). *Onset:* start-cue AUC at −0.3 s 0.617 [0.58, 0.66] on Seamless and 0.697
+[0.69, 0.70] on CANDOR, shuffled 0.50 / 0.51 — **gate 1's start-cue criterion passes on both** with the plain model
+(one logistic per scoring offset; the earlier 0.598 / 0.538 came from one model for all offsets and a shuffle that could
+draw the partner's file). *Offset:* the end-vs-pause signal arrives in the first 300 ms after the sound stops on both
+(0.57 → 0.68 Seamless, 0.62 → 0.70 CANDOR from the window ending at −0.3 s to the one ending at +0.3 s); CANDOR adds a
+≈ 1 s smile build-up before social turn ends that Seamless lacks. *Pause precursor:* the head goes still half a second
+before a within-turn pause on both corpora (d −0.32 / −0.14 at −0.3 s), decodable from head + gaze + eyes alone (0.58 /
+0.56) and not from the mouth — a hold cue. *Own display, not reaction:* with the listener removed (nobody speaks for
+≥ 1 s) ends still separate from pauses at 0.61–0.68, and aligned on the listener's onset the smile, gaze settling and
+blink suppression are already in place before the listener's first word. Metrics 2, 2b and 4 annotated accordingly.
+
 ## 2. Model
 
 One backbone, three modes, trained with modality dropout so audio-only, visual-only and audio-visual scores
@@ -198,6 +211,8 @@ Per run, per mode (A, V, AV), with conversation-level bootstrap CIs (clips as th
    there is nothing for the judge to validate against. The causal question (does an avatar's bid shorten a
    live user's turn) stays out of reach in this harness, where the user is a recording; see §7.
 4. **Hold-cue FAR** — share of incomplete pauses on which `p_end(τ)` crosses the human-fitted θ(τ) table.
+   *(2026-11-08: humans precede a within-turn pause with a still head from −0.5 s on both corpora; a secondary
+   "hold-cue agreement" — `p_end` falling when the speaker's head freezes into a silence — is worth reporting here.)*
    For avatars this measures whether their pauses look like turn ends (TTS phrase breaks usually do).
 5. **Visual gain** — AV minus A for metrics 1 and 3; the number that survives the "TTS audio is cue-poor"
    objection.
