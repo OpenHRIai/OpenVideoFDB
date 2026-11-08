@@ -5,7 +5,8 @@ runs with `agent.mp4`), the R2 track pipeline and audio heads in `smart-turn-mul
 (`eot/model_av.py`, `scripts/r2_*.py`, Modal volume `smart-turn-v2`), and the bid study's findings
 (`docs/r2_floor_bids.md` on branch `r2-floor-bids` of that repo, done 2026-10-27, see §1b). **Est.:** 8–12
 working days across four phases, with a kill gate after phase 1. **Status 2026-11-08:** spec + phase 1a done;
-phase 0 and phase 1 not started.
+phase 0 started (`ovfdb/score/lanes.py` extractor done and run on CANDOR; `cues.py` not started); CANDOR replication
+pilot done (§1b), full run pending; phase 1 not started.
 **Files (this repo):** `ovfdb/score/lanes.py`, `ovfdb/score/cues.py`, `ovfdb/score/cue_judge.py`,
 `ovfdb/cli.py` (`score-cues`), `ovfdb/score/report.py` (one new table), `tests/test_cues.py`,
 `results/cues_*.md`, `docs/protocol.md` §11 (new). Training code stays in the private repo; this repo
@@ -93,6 +94,17 @@ What this fixes below: start-cue horizons h = 0.4 s and 1 s (2 s is a weak tail;
 correlate and is dropped); bid features are mouth opening and lip posture, blink, head/gaze motion energy,
 arousal, hand lift — not gaze direction or posture; the partner-face branch into the speaker's heads and
 the "bid effect" validity measure are dropped, since both are ≈ 0 on human data.
+
+**Replication on CANDOR (pilot 2026-11-08; `docs/candor_floor_bids.md` on branch `candor-bids` of the private repo).**
+CANDOR (BetterUp, 1,656 unscripted video calls between strangers, 2020 webcams, 320 × 240) answers the study's
+limitations in one move: a second site, strangers only, and an open extractor — the study's own `ovfdb/score/lanes.py`
+(MediaPipe, 10 Hz) on the participant videos, since CANDOR's shipped video features are per-second. On 5 conversations /
+256 onsets the headline holds: inner-lip gap diverges at −1.4 s (d 0.62 at −0.3 s), `jawOpen` at −0.8 s (0.41),
+`cheekPuff` and `mouthUpperUp` ≈ 0.4, nothing at −2 s, head/gaze motion and blink late and small, gaze direction (iris
+offset, `eyeLook*`), brows and head yaw silent, backchannel = 0.3 s jaw spike with a smile baseline; a
+leave-one-conversation-out bid score reaches AUC 0.61 at the onset (0.54 / 0.53 at −1 / −2 s) on five conversations.
+Licence consequence: CANDOR permits commercial use and sharing Models trained on it (with notice, no redistribution of
+tracks, 30-day removals), so a judge trained on CANDOR could ship without the NC restriction in §2.
 
 ## 2. Model
 
@@ -182,6 +194,7 @@ Judge validity on human data (phase 1 and 3 report, Seamless test split, 133 spe
 | human reference for the judge | Seamless test split, both participants | exists (WS9 frozen set + full-file tracks) |
 | avatar evaluation | `runs_nv/{tavus_av2av,anam_a2av,heygen_a2av}` (121 generation rows each, `agent.mp4` 1280×720 30 fps + `agent.wav` + events with `first_video_s`/`first_audio_s`); `runs_v1/post/*` (7 Seamless clips, 3 avatars + human partner) | exists |
 | paired human-vs-avatar on the same stimuli | re-run the three avatars on `manifest/ovfdb_v1_reviewed.jsonl` (48 accepted rows; ≈ 20 vendor-minutes each) — the NVIDIA human partner video exists on 4 validation rows only, so pairing must come from Seamless | phase 3, optional but recommended |
+| cross-site replication / commercial training set | CANDOR processed flavour (34 archives, 346 GB, 3,312 participant videos): `scripts/candor_prep.py` per archive, `scripts/candor_modal.py` for all 34 on Modal volume `candor` (video discarded; ≈ 100 GB FLAC + 20 GB tracks kept); events by the WS9 rules on Silero VAD + 2024 AWS words (`eot/candor.py`, private repo) | pilot archive done locally (`data/candor/`); full run pending |
 
 Licence boundaries as in WS9/R2: Seamless-derived tracks and the model under NC; NVIDIA avatar runs stay
 local (results publishable, frames not).

@@ -25,13 +25,24 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   preparation has no measurable effect on the speaker (turn ends +0.003 AUC; pauses of any kind at chance). Face
   features exist for site V00 only. The spec's §1b carries the numbers and the decisions they fixed (horizons 0.4 /
   1 s; partner-face branch and bid-effect measure dropped).
-- **Uncommitted in this checkout:** `plans/WS10-cue-judge.md` (new), `PLAN.md` (WS9 + WS10 rows), `STATUS.md`.
-  WS9 (end-of-turn set) is still only on branch `ws9-endpointing-private`; `main` has no WS9 row on the board by the
-  maintainer's choice (SmartTurn probe results stay unpublished until the model improves).
-- **Next:** WS10 phase 0 here (`ovfdb/score/lanes.py` MediaPipe tracks at 10 fps, `ovfdb/score/cues.py` metrics with
-  synthetic-track tests, face-found rate + AV offset on the avatar runs), then phase 1 in the private repo
-  (`p_start(h)` heads on the R2 tracks, gate). Independent of WS10, the earlier "Next" list (Tavus perception rows,
-  second judge, Seamless v1 model runs) still stands.
+- **CANDOR (2026-11-08, same session).** Access to the CANDOR corpus (BetterUp; 1,656 unscripted video calls between
+  strangers, licence allows commercial use and shareable Models, no redistribution, 30-day removals) was granted to the
+  maintainer's HF account `maxipesfix`. Its shipped video features are per-second and useless for the bid study, so the
+  replication runs our own extractor on the participant videos. **Done:** `ovfdb/score/lanes.py` (WS10 phase 0: MediaPipe
+  Face Landmarker at 10 Hz → `face.npy` (T, 66) + `face.json` with found rate and `av_sync_offset_ms`; ≈ 25× real time on
+  the laptop, 100 % faces on the avatar clips), `scripts/candor_prep.py` (archive → per-participant 16 kHz audio, Silero
+  VAD, face tracks under `data/candor/proc/<conv>/<uid>/`), `scripts/candor_modal.py` (one container per archive on the
+  Modal volume `candor`, video never stored). Pilot on archive 034 (6 conversations, 5 usable, 256 onsets): the Seamless
+  bid-study headline reproduces with the open extractor on strangers at a different site — report
+  `docs/candor_floor_bids.md` in `smart-turn-multimodal-private`, branch `candor-bids` (loaders `eot/candor.py`, scripts
+  `scripts/candor_bids_*.py`). Local media: `data/candor/raw/processed_media_part_034/<conv>/processed/` (git-ignored).
+- **Next:** (1) full CANDOR extraction on Modal (`uv run --with modal modal run --detach scripts/candor_modal.py --archives all`,
+  ≈ 80 CPU-hours, ≈ 100 GB FLAC + 20 GB tracks on the volume), then analyses 1–5 of the bid study on the whole corpus
+  and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder
+  here (`ovfdb/score/cues.py` metrics with synthetic-track tests, face-found rate + AV offset table on the avatar runs);
+  (3) decide whether the WS10 judge trains on CANDOR (commercial) instead of Seamless (NC) — spec §2 licence line.
+  WS9 (end-of-turn set) is still only on branch `ws9-endpointing-private`. Independent of WS10, the earlier "Next" list
+  (Tavus perception rows, second judge, Seamless v1 model runs) still stands.
 
 ## HANDOFF 2026-10-17 (end of session 3) — read this first
 **v0.1.0 is released** (GitHub `OpenHRIai/OpenVideoFDB` + tag/release, HF dataset `OpenHRI/open-videofdb`).
