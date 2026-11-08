@@ -142,6 +142,15 @@ before a within-turn pause on both corpora (d −0.32 / −0.14 at −0.3 s), de
 0.56) and not from the mouth — a hold cue. *Own display, not reaction:* with the listener removed (nobody speaks for
 ≥ 1 s) ends still separate from pauses at 0.61–0.68, and aligned on the listener's onset the smile, gaze settling and
 blink suppression are already in place before the listener's first word. Metrics 2, 2b and 4 annotated accordingly.
+*Start cue is onset-locked, not offset-locked (report §1b):* split by the gap between the speaker's offset and the
+listener's onset, the listener's preparation ramp begins 0.7–1.0 s before its own onset in every gap bin on both
+corpora, so it falls inside the partner's speech for short gaps and inside the silence for long ones. Against the same
+listener during the speaker's own pauses (silence vs silence), a Seamless listener is at chance while the speaker still
+talks (0.50–0.53) and becomes distinguishable from 300 ms into the silence (0.59, 0.66 at +1 s); a CANDOR listener is
+already distinguishable a second before the offset (0.61) and the silence adds nothing (0.64 flat) — the social-talk
+listener state. Consequence for the h = 1 s head: it cannot fire before the user's own ramp; on task talk the user's
+face in a silence separates floor-taking from waiting from ≈ 300 ms in, the same moment the speaker's yield display
+appears.
 
 ## 2. Model
 

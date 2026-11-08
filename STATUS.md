@@ -66,6 +66,10 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   gate passes on both (0.62 Seamless / 0.70 CANDOR at −0.3 s, shuffled 0.50); yield signal in the first 300 ms after the
   offset on both; head stillness precedes pauses on both (hold cue); post-offset signals are the speaker's own. CANDOR adds a
   ≈ 1 s pre-end smile on social turns. Spec §1b/§3 updated.
+- **Gap split done 2026-11-08** (`cue_onset.py --only-gap`, report §1b, findings §2.1b/§3.1b): the listener's start-cue
+  ramp is locked to its own onset (0.7–1.0 s ahead in every gap bin, both corpora), so it starts during the speaker's
+  speech for gaps < 0.7 s and in the silence otherwise. Silence-vs-silence control (taker vs the speaker's own pauses):
+  Seamless chance before the offset, 0.59 at +0.3 s, 0.66 at +1 s; CANDOR 0.61 a second before the offset, flat 0.64 after.
 - **Next:** (1) the remaining bid-study analyses on CANDOR (abandoned bids, slices by quality flags / know-your-partner,
   backchannels) and the words-in-last-second split of CANDOR's pre-end smile of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder
