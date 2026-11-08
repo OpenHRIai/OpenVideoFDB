@@ -14,6 +14,15 @@ without a face (column ``found`` is 0 there), and ``face.json`` with the column 
 sampling grid, the found rate, the native video geometry and ``av_sync_offset_ms`` (the lag
 that best aligns ``jawOpen`` with the file's own audio envelope; positive = audio leads video).
 
+Framing: a probe pass over ``PROBE_FRAMES`` frames decides, per file, the rotation (0/90/270°, for files stored
+sideways without a rotation tag) and whether to work on a fixed square crop around the face: full-body shots such
+as the Seamless recordings leave the face a few dozen pixels wide after downscaling and the detector loses it, so
+when the median face is narrower than ``CROP_MIN_FACE_FRAC`` of the frame the landmarker runs on a crop of
+``CROP_SCALE`` face widths centred on the median face position. Head-and-shoulders video (CANDOR, avatars) needs
+no crop and the probe changes nothing there. ``face.json`` records ``rotation``, ``crop`` (pixel box in the
+rotated frame, or null) and the probe counts; ``face_cx/cy/w`` and the ``frames.npz`` landmarks are relative to
+the crop when there is one. Blendshapes, head pose and the eye-width-normalised measures do not depend on it.
+
 Time base: row ``k`` is the first decoded frame whose presentation time ``t`` satisfies
 ``floor(t * fps) == k``, with ``t`` relative to the container start (the audio clock), so the
 tracks line up with ``agent.wav`` / the participant's audio without any extra offset.
@@ -41,6 +50,11 @@ import numpy as np
 log = logging.getLogger(__name__)
 
 FPS = 10
+PROBE_FRAMES = 12          #: frames spread over the file that decide rotation and crop
+PROBE_LONG_SIDE = 1920     #: probe frames are decoded no larger than this on the long side
+CROP_MIN_FACE_FRAC = 0.20  #: crop when the median face is narrower than this fraction of the (rotated) frame width
+CROP_SCALE = 4.0           #: crop side = this × the median face width (square, clamped to the frame)
+CROP_MIN_PX = 160
 DEFAULT_MODEL = Path("data/models/face_landmarker.task")
 MODEL_URL = ("https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/"
              "float16/latest/face_landmarker.task")
@@ -209,16 +223,106 @@ def av_sync_offset_ms(mouth: np.ndarray, env: np.ndarray | None, fps: int = FPS,
     return round(float(lags[int(np.argmax(corr))] * 1000 / fps), 1)
 
 
+def _rotate(img: np.ndarray, rotation: int) -> np.ndarray:
+    """Rotate a stored frame clockwise by ``rotation`` degrees (0, 90, 270) so the face is upright."""
+    if rotation == 90:
+        return np.rot90(img, k=-1)
+    if rotation == 270:
+        return np.rot90(img, k=1)
+    return img
+
+
+def _probe_windows(level: int):
+    if level == 0:
+        yield (0.0, 0.0, 1.0, 1.0)
+    elif level == 1:
+        for x, y in ((0.0, 0.0), (0.4, 0.0), (0.0, 0.4), (0.4, 0.4)):
+            yield (x, y, x + 0.6, y + 0.6)
+    else:
+        side, step = 0.35, (1 - 0.35) / 3
+        for i in range(4):
+            for j in range(4):
+                yield (j * step, i * step, j * step + side, i * step + side)
+
+
+def probe(video: Path, model: Path = DEFAULT_MODEL, *, n: int = PROBE_FRAMES, start_s: float | None = None,
+          end_s: float | None = None) -> dict:
+    """Decide rotation and face box for one file from ``n`` frames spread over it.
+
+    For each rotation the landmarker (image mode) looks at the whole frame, then at 2 × 2 overlapping windows,
+    then at a 4 × 4 grid, stopping at the first level where some rotation finds a face on at least half the
+    frames. Returns ``rotation``, ``level``, ``n_probe``, ``n_found``, ``found_by_rotation`` and ``box``
+    (median ``[cx, cy, w, h]`` normalised to the rotated frame, or None)."""
+    import av
+    import mediapipe as mp
+    opts = mp.tasks.vision.FaceLandmarkerOptions(
+        base_options=mp.tasks.BaseOptions(model_asset_path=str(ensure_model(model))),
+        running_mode=mp.tasks.vision.RunningMode.IMAGE, num_faces=1, min_face_detection_confidence=0.5)
+    det = mp.tasks.vision.FaceLandmarker.create_from_options(opts)
+    frames: list[np.ndarray] = []
+    with av.open(str(video)) as c:
+        vs = c.streams.video[0]
+        dur = float(vs.duration * vs.time_base) if vs.duration else (c.duration / 1e6 if c.duration else 0.0)
+        t0, t1 = (start_s or 0.0), (end_s if end_s is not None else dur)
+        W, H = vs.codec_context.width, vs.codec_context.height
+        sc = min(1.0, PROBE_LONG_SIDE / max(W, H))
+        w, h = int(round(W * sc / 2) * 2), int(round(H * sc / 2) * 2)
+        for i in range(n):
+            t = t0 + (t1 - t0) * (i + 0.5) / n
+            try:
+                c.seek(int(t / vs.time_base), stream=vs, backward=True, any_frame=False)
+                fr = next(c.decode(vs))
+            except (StopIteration, av.error.FFmpegError):
+                continue
+            frames.append(fr.reformat(width=w, height=h, format="rgb24").to_ndarray() if sc < 1.0 else fr.to_ndarray(format="rgb24"))
+    out = {"n_probe": len(frames), "rotation": 0, "level": None, "n_found": 0, "found_by_rotation": {}, "box": None}
+    if not frames:
+        det.close()
+        return out
+    rots = (0, 90, 270)
+    for level in (0, 1, 2):
+        boxes: dict[int, list] = {}
+        for rot in rots:
+            boxes[rot] = []
+            for img in frames:
+                r = _rotate(img, rot); Hh, Ww = r.shape[:2]
+                best = None
+                for x0, y0, x1, y1 in _probe_windows(level):
+                    sub = np.ascontiguousarray(r[int(y0 * Hh): int(y1 * Hh), int(x0 * Ww): int(x1 * Ww)])
+                    res = det.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=sub))
+                    if res.face_landmarks:
+                        lm = res.face_landmarks[0]
+                        xs = np.fromiter((p.x for p in lm), float, len(lm)); ys = np.fromiter((p.y for p in lm), float, len(lm))
+                        box = (x0 + (xs.min() + xs.max()) / 2 * (x1 - x0), y0 + (ys.min() + ys.max()) / 2 * (y1 - y0),
+                               (xs.max() - xs.min()) * (x1 - x0), (ys.max() - ys.min()) * (y1 - y0))
+                        if best is None or box[2] > best[2]:
+                            best = box
+                if best is not None:
+                    boxes[rot].append(best)
+        counts = {rot: len(b) for rot, b in boxes.items()}
+        best_rot = max(rots, key=lambda r: counts[r])
+        out.update(level=level, rotation=int(best_rot), n_found=counts[best_rot], found_by_rotation={str(k): v for k, v in counts.items()})
+        if counts[best_rot] >= max(1, len(frames) // 2):
+            break
+    det.close()
+    if out["n_found"]:
+        out["box"] = [float(v) for v in np.median(np.array(boxes[out["rotation"]]), axis=0)]
+    return out
+
+
 def extract(video: Path, out_dir: Path, *, fps: int = FPS, model: Path = DEFAULT_MODEL, max_width: int = MAX_WIDTH,
             sync: bool = True, start_s: float | None = None, end_s: float | None = None,
-            extras: bool = False) -> dict:
+            extras: bool = False, framing: str = "auto") -> dict:
     """Run the extractor on one video; writes ``face.npy`` + ``face.json`` into ``out_dir`` and returns the json dict.
 
     ``start_s`` / ``end_s`` restrict decoding to a window of the file (rows stay on the file's own time grid; rows
-    before ``start_s`` are NaN with found=0). ``extras`` also writes ``frames.npz`` (see the module docstring)."""
+    before ``start_s`` are NaN with found=0). ``extras`` also writes ``frames.npz`` (see the module docstring).
+    ``framing``: ``"auto"`` runs the probe and crops / rotates when needed, ``"none"`` processes the stored frame."""
     import av
     t_wall = time.time()
     out_dir.mkdir(parents=True, exist_ok=True)
+    pr = probe(video, model, start_s=start_s, end_s=end_s) if framing == "auto" else None
+    rotation = int(pr["rotation"]) if pr else 0
     lmk = _landmarker(ensure_model(model))
     rows: dict[int, np.ndarray] = {}
     pts: dict[int, float] = {}
@@ -232,8 +336,18 @@ def extract(video: Path, out_dir: Path, *, fps: int = FPS, model: Path = DEFAULT
                     native_fps=float(vs.average_rate) if vs.average_rate else None,
                     video_start_s=float((vs.start_time or 0) * vs.time_base),
                     duration_s=float(vs.duration * vs.time_base) if vs.duration else (c.duration / 1e6 if c.duration else None))
-        scale = min(1.0, max_width / vs.codec_context.width) if vs.codec_context.width else 1.0
-        w = int(round(vs.codec_context.width * scale / 2) * 2); h = int(round(vs.codec_context.height * scale / 2) * 2)
+        W0, H0 = vs.codec_context.width, vs.codec_context.height
+        Wr, Hr = (H0, W0) if rotation in (90, 270) else (W0, H0)          # rotated-frame size
+        crop = None
+        if pr and pr["box"] and pr["box"][2] * Wr < CROP_MIN_FACE_FRAC * Wr:
+            cx, cy, fw = pr["box"][0] * Wr, pr["box"][1] * Hr, pr["box"][2] * Wr
+            side = min(max(CROP_SCALE * fw, CROP_MIN_PX), Wr, Hr)
+            x0 = int(np.clip(cx - side / 2, 0, Wr - side)); y0 = int(np.clip(cy - side / 2, 0, Hr - side))
+            crop = (x0, y0, x0 + int(side), y0 + int(side))
+        meta.update(rotation=rotation, crop=list(crop) if crop else None, probe=pr, framing=framing)
+        scale = min(1.0, max_width / (crop[2] - crop[0])) if crop else (min(1.0, max_width / Wr) if Wr else 1.0)
+        w = int(round(W0 * scale / 2) * 2); h = int(round(H0 * scale / 2) * 2)
+        cbox = tuple(round(v * scale) for v in crop) if crop else None
         if start_s:
             c.seek(int(start_s / vs.time_base), stream=vs, backward=True, any_frame=False)
         import mediapipe as mp
@@ -250,6 +364,10 @@ def extract(video: Path, out_dir: Path, *, fps: int = FPS, model: Path = DEFAULT
                 continue
             last_k = k
             img = fr.reformat(width=w, height=h, format="rgb24").to_ndarray() if scale < 1.0 else fr.to_ndarray(format="rgb24")
+            if rotation:
+                img = _rotate(img, rotation)
+            if cbox:
+                img = img[cbox[1]: cbox[3], cbox[0]: cbox[2]]
             res = lmk.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=np.ascontiguousarray(img)), round(k * 1000 / fps))
             rows[k] = frame_features(res)
             if extras:
@@ -311,6 +429,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--no-sync", action="store_true")
     ap.add_argument("--extras", action="store_true", help="also write frames.npz (frame times, luma/blur, landmark subset)")
     ap.add_argument("--skip-existing", action="store_true")
+    ap.add_argument("--framing", choices=["auto", "none"], default="auto", help="auto: probe for rotation and a per-file face crop")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     for v in a.videos:
@@ -318,9 +437,9 @@ def main(argv: list[str] | None = None) -> None:
         if a.skip_existing and (out / "face.json").exists():
             continue
         m = extract(v, out, fps=a.fps, model=a.model, max_width=a.max_width, sync=not a.no_sync, start_s=a.start, end_s=a.end,
-                    extras=a.extras)
-        log.info("%s: %d rows, found %.1f%%, sync %s ms, %.0fs", v.name, m["n_rows"], 100 * m["found_rate"],
-                 m.get("av_sync_offset_ms"), m["seconds"])
+                    extras=a.extras, framing=a.framing)
+        log.info("%s: %d rows, found %.1f%%, sync %s ms, rot %s crop %s, %.0fs", v.name, m["n_rows"], 100 * m["found_rate"],
+                 m.get("av_sync_offset_ms"), m.get("rotation"), m.get("crop"), m["seconds"])
 
 
 if __name__ == "__main__":
