@@ -37,8 +37,13 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   bid-study headline reproduces with the open extractor on strangers at a different site — report
   `docs/candor_floor_bids.md` in `smart-turn-multimodal-private`, branch `candor-bids` (loaders `eot/candor.py`, scripts
   `scripts/candor_bids_*.py`). Local media: `data/candor/raw/processed_media_part_034/<conv>/processed/` (git-ignored).
-- **Next:** (1) full CANDOR extraction on Modal (`uv run --with modal modal run --detach scripts/candor_modal.py --archives all`,
-  ≈ 360 CPU-hours on Modal's x86 cores, ≈ 1.5 h wall-clock, ≈ 100 GB FLAC + 20 GB tracks on the volume), then analyses 1–5 of the bid study on the whole corpus
+- **Full CANDOR extraction launched 2026-11-08 14:09 JST** (`modal run --detach scripts/candor_modal.py --archives all`, app
+  `ap-h4oNI1NQSMKC4NziAA4GNz` in the `susurobo` workspace; local log `data/candor/modal_all.log`). Writes per participant
+  `audio16.flac`, `vad.json`, `face.npy`/`face.json` and `frames.npz` (frame times, luma/blur, 125-point landmark subset) and
+  per conversation `meta.json`, the shipped stereo mp3 and thumbnail — everything a later cue measure might need, since the
+  video is not kept. Expect ≈ 360 CPU-hours, ≈ 1.5 h wall-clock, ≈ 100 GB FLAC + 50 GB mp3 + 60 GB tracks on the volume.
+  Fetch with `modal volume get candor proc data/candor/proc_modal` (too big for the laptop; pull subsets or analyse on Modal).
+- **Next:** (1) when the run finishes, check `/vol/logs/*.json` for errors, then analyses 1–5 of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder
   here (`ovfdb/score/cues.py` metrics with synthetic-track tests, face-found rate + AV offset table on the avatar runs);
   (3) decide whether the WS10 judge trains on CANDOR (commercial) instead of Seamless (NC) — spec §2 licence line.
