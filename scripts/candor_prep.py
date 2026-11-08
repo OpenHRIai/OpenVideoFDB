@@ -11,6 +11,9 @@ Reads the archive layout documented on the dataset card (one folder per conversa
     data/candor/proc/<conversation_id>/<user_id>/audio16.wav     this participant's channel, 16 kHz mono PCM16
     data/candor/proc/<conversation_id>/<user_id>/vad.json        Silero regions [[start, end], ...] (ovfdb.score.vad)
     data/candor/proc/<conversation_id>/<user_id>/face.npy|json   ovfdb.score.lanes tracks at 10 Hz
+    data/candor/proc/<conversation_id>/<user_id>/frames.npz      per-row frame time, luma/blur, landmark subset
+    data/candor/proc/<conversation_id>/<conversation_id>.mp3     the shipped 48 kHz stereo mix, as is
+    data/candor/proc/<conversation_id>/thumbnail.png             the shipped thumbnail (who sits where)
 
 The video is read once and discarded afterwards when ``--delete-video`` is given (the Modal
 path). CANDOR is licensed for commercial use but not redistributable: everything under
@@ -23,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import shutil
 import subprocess
 import sys
 import time
@@ -110,6 +114,9 @@ def process_conversation(conv: Path, out_root: Path = PROC, *, fps: int = lanes.
     mp3 = conv / "processed" / f"{cid}.mp3"
     info: dict = {"conversation_id": cid, "channels": chans, "metadata": meta, "probe": {}}
     info["probe"]["mp3"] = probe(mp3)
+    for src in (mp3, conv / "processed" / "thumbnail.png"):       # keep the originals that are cheap to keep
+        if src.exists() and not (out / src.name).exists():
+            shutil.copy2(src, out / src.name)
     wavs = split_audio(mp3, chans, out, audio_format)
     for uid, wav in wavs.items():
         vj = out / uid / "vad.json"
@@ -120,7 +127,7 @@ def process_conversation(conv: Path, out_root: Path = PROC, *, fps: int = lanes.
         if mp4.exists():
             info["probe"][uid] = probe(mp4)
             if not skip_face and not (out / uid / "face.json").exists():
-                m = lanes.extract(mp4, out / uid, fps=fps)
+                m = lanes.extract(mp4, out / uid, fps=fps, extras=True)
                 info.setdefault("face", {})[uid] = {k: m[k] for k in ("n_rows", "found_rate", "av_sync_offset_ms", "native_fps", "width", "height", "video_start_s", "duration_s", "seconds")}
             if delete_video:
                 mp4.unlink()

@@ -17,6 +17,15 @@ that best aligns ``jawOpen`` with the file's own audio envelope; positive = audi
 Time base: row ``k`` is the first decoded frame whose presentation time ``t`` satisfies
 ``floor(t * fps) == k``, with ``t`` relative to the container start (the audio clock), so the
 tracks line up with ``agent.wav`` / the participant's audio without any extra offset.
+
+With ``extras=True`` (the CANDOR run, where the video is discarded afterwards) a second file
+``frames.npz`` keeps what a later feature definition might need without re-decoding: ``pts``
+(T,) the presentation time of the frame behind each row (NaN where a bin had no frame),
+``quality`` (T, 2) mean luma and Laplacian variance of the sampled frame (lighting / blur),
+``landmarks`` (T, K, 3) float16 normalised x, y, z of the ``LANDMARK_SUBSET`` points (lips,
+eye contours, irises, brows, nose/cheek/chin references; K = len(LANDMARK_IDS)) and
+``landmark_ids`` (K,) their mesh indices. The subset is expression geometry, not the full
+face mesh, which keeps it on the blendshape side of the CANDOR licence's biometric clause.
 """
 
 from __future__ import annotations
@@ -60,6 +69,24 @@ _GEOM0 = 1 + len(BLENDSHAPES)
 L_EYE_INNER, L_EYE_OUTER, L_IRIS, L_LID_UP, L_LID_LO = 133, 33, 468, 159, 145
 R_EYE_INNER, R_EYE_OUTER, R_IRIS, R_LID_UP, R_LID_LO = 362, 263, 473, 386, 374
 LIP_UP_INNER, LIP_LO_INNER = 13, 14
+
+#: Landmarks kept per frame when ``extract(..., extras=True)``: the regions every cue measure so far has used
+#: (mouth, eyes, gaze, brows) plus the references needed to normalise them and the cheek points behind
+#: the MediaPipe cheekPuff blendshape, whose sign disagreed with Meta's AU13 in the CANDOR pilot.
+LANDMARK_SUBSET: dict[str, list[int]] = {
+    "lips_outer": [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185],
+    "lips_inner": [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191],
+    "eye_a": [33, 7, 163, 144, 145, 153, 154, 155, 133, 246, 161, 160, 159, 158, 157, 173],
+    "eye_b": [263, 249, 390, 373, 374, 380, 381, 382, 362, 466, 388, 387, 386, 385, 384, 398],
+    "iris_a": [468, 469, 470, 471, 472],
+    "iris_b": [473, 474, 475, 476, 477],
+    "brow_a": [46, 53, 52, 65, 55, 70, 63, 105, 66, 107],
+    "brow_b": [276, 283, 282, 295, 285, 300, 293, 334, 296, 336],
+    "nose": [1, 2, 4, 5, 6, 168, 195, 197, 98, 327],
+    "cheeks": [50, 280, 205, 425, 101, 330, 187, 411, 123, 352],
+    "chin": [152, 199, 175],
+}
+LANDMARK_IDS = np.array(sorted({i for ids in LANDMARK_SUBSET.values() for i in ids}), dtype=np.int16)
 
 
 def _euler(R: np.ndarray) -> tuple[float, float, float]:
@@ -183,16 +210,20 @@ def av_sync_offset_ms(mouth: np.ndarray, env: np.ndarray | None, fps: int = FPS,
 
 
 def extract(video: Path, out_dir: Path, *, fps: int = FPS, model: Path = DEFAULT_MODEL, max_width: int = MAX_WIDTH,
-            sync: bool = True, start_s: float | None = None, end_s: float | None = None) -> dict:
+            sync: bool = True, start_s: float | None = None, end_s: float | None = None,
+            extras: bool = False) -> dict:
     """Run the extractor on one video; writes ``face.npy`` + ``face.json`` into ``out_dir`` and returns the json dict.
 
     ``start_s`` / ``end_s`` restrict decoding to a window of the file (rows stay on the file's own time grid; rows
-    before ``start_s`` are NaN with found=0)."""
+    before ``start_s`` are NaN with found=0). ``extras`` also writes ``frames.npz`` (see the module docstring)."""
     import av
     t_wall = time.time()
     out_dir.mkdir(parents=True, exist_ok=True)
     lmk = _landmarker(ensure_model(model))
     rows: dict[int, np.ndarray] = {}
+    pts: dict[int, float] = {}
+    quality: dict[int, tuple[float, float]] = {}
+    lms: dict[int, np.ndarray] = {}
     meta: dict = {"video": str(video), "fps": fps, "features": FEATURES, "model": str(model)}
     with av.open(str(video)) as c:
         vs = c.streams.video[0]
@@ -221,6 +252,14 @@ def extract(video: Path, out_dir: Path, *, fps: int = FPS, model: Path = DEFAULT
             img = fr.reformat(width=w, height=h, format="rgb24").to_ndarray() if scale < 1.0 else fr.to_ndarray(format="rgb24")
             res = lmk.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=np.ascontiguousarray(img)), round(k * 1000 / fps))
             rows[k] = frame_features(res)
+            if extras:
+                pts[k] = t
+                g = img.astype(np.float32).mean(axis=2)
+                lap = g[:-2, 1:-1] + g[2:, 1:-1] + g[1:-1, :-2] + g[1:-1, 2:] - 4 * g[1:-1, 1:-1]
+                quality[k] = (float(g.mean()), float(lap.var()))
+                if res.face_landmarks:
+                    lm = res.face_landmarks[0]
+                    lms[k] = np.array([(lm[i].x, lm[i].y, lm[i].z) for i in LANDMARK_IDS], dtype=np.float16)
     lmk.close()
     T = (last_k + 1) if last_k >= 0 else 0
     arr = np.full((T, len(FEATURES)), np.nan, np.float32)
@@ -239,6 +278,19 @@ def extract(video: Path, out_dir: Path, *, fps: int = FPS, model: Path = DEFAULT
         except Exception as e:  # noqa: BLE001 — sync is diagnostic, never fatal
             meta["has_audio"], meta["av_sync_offset_ms"], meta["sync_error"] = None, None, str(e)
     np.save(out_dir / "face.npy", arr)
+    if extras:
+        p_arr = np.full(T, np.nan, np.float32); q_arr = np.full((T, 2), np.nan, np.float32)
+        l_arr = np.full((T, len(LANDMARK_IDS), 3), np.nan, np.float16)
+        for k, v in pts.items():
+            p_arr[k] = v
+        for k, v in quality.items():
+            q_arr[k] = v
+        for k, v in lms.items():
+            l_arr[k] = v
+        np.savez(out_dir / "frames.npz", pts=p_arr, quality=q_arr, landmarks=l_arr, landmark_ids=LANDMARK_IDS)
+        meta["extras"] = {"file": "frames.npz", "n_landmarks": len(LANDMARK_IDS),
+                          "landmark_groups": {g: len(ids) for g, ids in LANDMARK_SUBSET.items()},
+                          "quality": ["luma_mean", "laplacian_var"]}
     (out_dir / "face.json").write_text(json.dumps(meta, indent=1))
     return meta
 

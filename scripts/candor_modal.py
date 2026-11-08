@@ -16,7 +16,10 @@ A full archive holds ≈ 50 conversations, so one container at 8 CPUs needs ≈ 
 One container per archive: download the zip from the gated Hugging Face dataset (token from the Modal secret
 ``huggingface``, created once with ``modal secret create huggingface HF_TOKEN=<token>``), unzip to the container's own disk, run
 ``scripts/candor_prep.process_conversation`` on each conversation with the video deleted after extraction, write
-``/vol/proc/<conversation_id>/...`` and ``/vol/logs/<archive>.json``, commit the volume, discard the container.
+``/vol/proc/<conversation_id>/...`` (per participant: ``audio16.flac``, ``vad.json``, ``face.npy`` + ``face.json``,
+``frames.npz`` with frame times, luma/blur and the landmark subset; per conversation: ``meta.json``, the shipped
+stereo ``<conversation_id>.mp3`` and ``thumbnail.png``) and ``/vol/logs/<archive>.json``, commit the volume,
+discard the container.
 The 346 GB of video is never stored anywhere. Everything CANDOR lives on its own volume (``candor``), apart from
 the CC BY-NC Seamless material on ``smart-turn-v2``.
 """
