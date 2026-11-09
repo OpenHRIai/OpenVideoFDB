@@ -218,7 +218,11 @@ Seamless and is not secured on dev. (2) Most of the earlier Seamless-vs-CANDOR g
 size, not setting. Use the cross-validated values as the Seamless human reference. (3) The frozen test-trained models and
 protocol statistics on the subset as a second unseen set: 14 of 16 primary tests confirmed; the growth of floor-taking in
 the silence fails again (−0.019), and "stiller head into a pause than into a turn end" does not replicate (+0.02
-[−0.04, +0.08]) and is no longer a Seamless-side cue. Gaze back to the partner, turn end minus pause, is +15.2 pp pooled,
+[−0.04, +0.08]) and is no longer a Seamless-side cue. Those frozen models are the small ones and understate model scores;
+with the larger models (every event scored by a model fitted on the other nine tenths of the 424 conversations) the
+growth of floor-taking in the first 0.3 s of silence is still absent (+0.007 [−0.01, +0.03]; +0.097 by 1.0 s), while the
+taker-vs-non-taker AUC 0.3 s before the stop is 0.544 [0.53, 0.56], small but above chance (CANDOR 0.591): the listener's
+early sign is present on Seamless at about half the CANDOR size, not absent. Gaze back to the partner, turn end minus pause, is +15.2 pp pooled,
 the same size as on CANDOR. Blink and downward gaze rise before a listener speaks on Seamless (+0.19, +0.24; near zero on
 CANDOR). (4) **Strangers vs acquainted pairs in the same room (180 vs 238 conversations): no statistic differs.** Seamless
 strangers show no readiness posture (+0.05 [−0.07, +0.18]; CANDOR +0.36), no pre-end smile (−0.04; CANDOR +0.19) and

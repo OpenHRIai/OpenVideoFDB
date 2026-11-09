@@ -131,7 +131,8 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   over all 424 tracked conversations: 0.660 / 0.644 / 0.735 / 0.627; dev is the low set for end vs pause before the
   stop. Gate 1's start-cue criterion is met on unseen Seamless; most of the earlier gap to CANDOR was training-set size.
   Frozen protocol on the subset: 14 of 16 primary tests confirmed; floor-taking growth in the silence fails again;
-  "stiller head into a pause" does not replicate. Strangers vs acquainted in the same room: no statistic differs, and
+  "stiller head into a pause" does not replicate. With the larger models in place of the frozen small one: floor-taking
+  growth still absent (+0.007), listener's early taker sign 0.544 [0.53, 0.56] (present, half of CANDOR's 0.591). Strangers vs acquainted in the same room: no statistic differs, and
   Seamless strangers show neither the readiness posture nor the pre-end smile nor the post-end blink of CANDOR, so
   relationship does not produce the CANDOR-side cues. **Not done:** the other 700 train conversations (about 12 h of
   tracking); audio-plus-visual on CANDOR; the judge's GRU heads (phase 1).
