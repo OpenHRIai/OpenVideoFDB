@@ -100,6 +100,9 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   relative to the partner per person (spec note added). Seamless test re-tracked with faces at CANDOR's 79 px
   (`data/seamless/lanes/test_face80/`, 157 files): every effect unchanged (head slowing d −0.32 / −0.32, start-cue AUC
   0.617 / 0.614), so resolution does not explain CANDOR's smaller motion effects.
+- **Partner gaze in the yield decoder, 2026-11-09** (`scripts/cue_gaze_decode.py`): end-vs-pause AUC with the four
+  partner-gaze columns added — Seamless 0.605 at −0.3 s, 0.726 at +0.3 s (from 0.560 / 0.681); CANDOR 0.641 / 0.720 (from
+  0.621 / 0.696). New human reference for metrics 2 and 2b; the judge's inputs should include partner-referenced gaze.
 - **Next:** (1) the remaining bid-study analyses on CANDOR (abandoned bids, slices by quality flags / know-your-partner,
   backchannels) and the words-in-last-second split of CANDOR's pre-end smile of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder

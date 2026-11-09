@@ -162,7 +162,10 @@ camera-relative features on Seamless (0.571). **Consequence for the judge:** fee
 (the pooled camera-relative gaze columns cannot carry this); for an agent the partner direction is the camera. Yield metric 2
 (pre-offset horizon) is therefore not ≈ 0 for humans once this feature exists: a human reference of ≈ 0.6 AUC about 0.5 s
 ahead. *Resolution (X2):* re-tracking Seamless with the face at CANDOR's 79 px (`lanes --face-px 80`) changes no effect, so
-low resolution is not why CANDOR's motion effects are smaller.
+low resolution is not why CANDOR's motion effects are smaller. *In the decoder (`scripts/cue_gaze_decode.py`):* four partner-gaze columns added
+to the 65 features raise end-vs-pause AUC at −0.3 / 0 / +0.3 / +1.0 s from 0.560 / 0.586 / 0.681 / 0.716 to 0.605 / 0.644 / 0.726 /
+0.770 on Seamless and from 0.621 / 0.652 / 0.696 / 0.727 to 0.641 / 0.673 / 0.720 / 0.751 on CANDOR (paired CIs exclude 0). These
+supersede the earlier human reference for metrics 2 and 2b.
 
 ## 2. Model
 
