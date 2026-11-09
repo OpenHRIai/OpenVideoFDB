@@ -160,7 +160,9 @@ def _download(url: str, dst: Path) -> bool:
         return True
     dst.parent.mkdir(parents=True, exist_ok=True)
     tmp = dst.with_suffix(dst.suffix + ".part")
-    with httpx.stream("GET", url, follow_redirects=True, timeout=None) as r:
+    # A read timeout: without one, a connection the OS drops (laptop sleep, mirror
+    # hiccup) hangs forever and stalls a batch. 60 s per chunk is generous for 4K video.
+    with httpx.stream("GET", url, follow_redirects=True, timeout=60) as r:
         if r.status_code in _MISSING_STATUS:
             return False
         r.raise_for_status()

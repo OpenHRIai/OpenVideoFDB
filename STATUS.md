@@ -134,7 +134,11 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   "stiller head into a pause" does not replicate. With the larger models in place of the frozen small one: floor-taking
   growth still absent (+0.007), listener's early taker sign 0.544 [0.53, 0.56] (present, half of CANDOR's 0.591). Strangers vs acquainted in the same room: no statistic differs, and
   Seamless strangers show neither the readiness posture nor the pre-end smile nor the post-end blink of CANDOR, so
-  relationship does not produce the CANDOR-side cues. **In progress since 2026-11-09 21:03:** tracking the other 700 train
+  relationship does not produce the CANDOR-side cues. **In progress since 2026-11-09 21:03, restarted 2026-11-10 07:34:** the first run froze at 22:29 when the lid
+  was closed on battery: the six open downloads kept dead sockets forever because the loader streamed with no
+  timeout (`ovfdb/data/seamless.py`, fixed to 60 s per chunk; the fetch script now retries a download three
+  times). 123 of 1,400 videos were done at the restart; the rest take about 9 h more with the Mac plugged in and
+  the lid open (`caffeinate -is` cannot stop lid-closed sleep on battery). Tracking the other 700 train
   conversations (1,400 videos, about 9 h, six workers) into the same `data/seamless/lanes/train`, log
   `data/seamless/lanes/train_rest_extract.log`; file order from `seamless_train_subset.py --rest-out` (seed 1, so an
   interrupted run leaves a random sample; rerunning skips tracked files). Then rerun `cue_seamless_scale.py` with the
