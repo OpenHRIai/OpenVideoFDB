@@ -153,6 +153,17 @@ listener state. Consequence for the h = 1 s head: it cannot fire before the user
 face in a silence separates floor-taking from waiting from ≈ 300 ms in, the same moment the speaker's yield display
 appears.
 
+*Gaze towards the partner (2026-11-09, private repo `scripts/cue_gaze.py`, hypotheses file S9).* With the partner's direction
+estimated per person from that person's own listening frames (median of head yaw / pitch and iris offset; 'at the partner' =
+within the 70 % listening cone), speakers are at the partner in +15 pp more frames in the last 0.5 s before a turn end than
+mid-turn on both corpora (Seamless +15.1 [+10.1, +19.4], CANDOR +15.3 [+14.3, +16.2]), +14 pp vs a pause, nothing before a
+pause; rise from ≈ −0.7 s on Seamless. Single-number AUC end vs pause before the offset 0.605 / 0.597 — above the 65
+camera-relative features on Seamless (0.571). **Consequence for the judge:** feed gaze relative to the partner, per person
+(the pooled camera-relative gaze columns cannot carry this); for an agent the partner direction is the camera. Yield metric 2
+(pre-offset horizon) is therefore not ≈ 0 for humans once this feature exists: a human reference of ≈ 0.6 AUC about 0.5 s
+ahead. *Resolution (X2):* re-tracking Seamless with the face at CANDOR's 79 px (`lanes --face-px 80`) changes no effect, so
+low resolution is not why CANDOR's motion effects are smaller.
+
 ## 2. Model
 
 One backbone, three modes, trained with modality dropout so audio-only, visual-only and audio-visual scores

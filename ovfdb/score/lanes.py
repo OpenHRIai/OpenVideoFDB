@@ -312,12 +312,15 @@ def probe(video: Path, model: Path = DEFAULT_MODEL, *, n: int = PROBE_FRAMES, st
 
 def extract(video: Path, out_dir: Path, *, fps: int = FPS, model: Path = DEFAULT_MODEL, max_width: int = MAX_WIDTH,
             sync: bool = True, start_s: float | None = None, end_s: float | None = None,
-            extras: bool = False, framing: str = "auto") -> dict:
+            extras: bool = False, framing: str = "auto", face_px: int | None = None) -> dict:
     """Run the extractor on one video; writes ``face.npy`` + ``face.json`` into ``out_dir`` and returns the json dict.
 
     ``start_s`` / ``end_s`` restrict decoding to a window of the file (rows stay on the file's own time grid; rows
     before ``start_s`` are NaN with found=0). ``extras`` also writes ``frames.npz`` (see the module docstring).
-    ``framing``: ``"auto"`` runs the probe and crops / rotates when needed, ``"none"`` processes the stored frame."""
+    ``framing``: ``"auto"`` runs the probe and crops / rotates when needed, ``"none"`` processes the stored frame.
+    ``face_px`` (needs ``framing="auto"``): decode at a lower resolution so the probed face is about this many pixels
+    wide, never higher than the normal path. For resolution-matching experiments only (e.g. 80 = a CANDOR webcam face);
+    recorded in ``face.json`` as ``face_px`` and ``decode_scale``."""
     import av
     t_wall = time.time()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -346,6 +349,9 @@ def extract(video: Path, out_dir: Path, *, fps: int = FPS, model: Path = DEFAULT
             crop = (x0, y0, x0 + int(side), y0 + int(side))
         meta.update(rotation=rotation, crop=list(crop) if crop else None, probe=pr, framing=framing)
         scale = min(1.0, max_width / (crop[2] - crop[0])) if crop else (min(1.0, max_width / Wr) if Wr else 1.0)
+        if face_px and pr and pr["box"]:
+            scale = min(scale, face_px / (pr["box"][2] * Wr))
+            meta.update(face_px=face_px, decode_scale=scale)
         w = int(round(W0 * scale / 2) * 2); h = int(round(H0 * scale / 2) * 2)
         cbox = tuple(round(v * scale) for v in crop) if crop else None
         if start_s:
@@ -430,6 +436,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--extras", action="store_true", help="also write frames.npz (frame times, luma/blur, landmark subset)")
     ap.add_argument("--skip-existing", action="store_true")
     ap.add_argument("--framing", choices=["auto", "none"], default="auto", help="auto: probe for rotation and a per-file face crop")
+    ap.add_argument("--face-px", type=int, default=None, help="experiments: decode so the probed face is about this many pixels wide")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     for v in a.videos:
@@ -437,7 +444,7 @@ def main(argv: list[str] | None = None) -> None:
         if a.skip_existing and (out / "face.json").exists():
             continue
         m = extract(v, out, fps=a.fps, model=a.model, max_width=a.max_width, sync=not a.no_sync, start_s=a.start, end_s=a.end,
-                    extras=a.extras, framing=a.framing)
+                    extras=a.extras, framing=a.framing, face_px=a.face_px)
         log.info("%s: %d rows, found %.1f%%, sync %s ms, rot %s crop %s, %.0fs", v.name, m["n_rows"], 100 * m["found_rate"],
                  m.get("av_sync_offset_ms"), m.get("rotation"), m.get("crop"), m["seconds"])
 

@@ -93,6 +93,13 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   belongs to hesitation fillers (um/uh) only — pauses after one are stiller than other pauses by d −0.28 half a second
   out; trail-off connectives (so/and/but) add nothing; ordinary-word pauses and turn ends slow equally (−0.18 / −0.16).
   Seamless transcripts carry almost no hesitation fillers, so untested there.
+- **Gaze-to-partner measure and resolution test, 2026-11-09** (private repo `scripts/cue_gaze.py`; `ovfdb/score/lanes.py`
+  gained an optional `face_px` / `--face-px` for resolution-matching experiments, default path unchanged). Speakers look
+  back at the partner before a turn end on both corpora: +15 pp of frames in the last 0.5 s vs mid-turn, +14 pp vs a
+  pause, single-number AUC end-vs-pause 0.605 (Seamless) / 0.597 (CANDOR) before the offset. The judge needs gaze
+  relative to the partner per person (spec note added). Seamless test re-tracked with faces at CANDOR's 79 px
+  (`data/seamless/lanes/test_face80/`, 157 files): every effect unchanged (head slowing d −0.32 / −0.32, start-cue AUC
+  0.617 / 0.614), so resolution does not explain CANDOR's smaller motion effects.
 - **Next:** (1) the remaining bid-study analyses on CANDOR (abandoned bids, slices by quality flags / know-your-partner,
   backchannels) and the words-in-last-second split of CANDOR's pre-end smile of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder
