@@ -89,6 +89,10 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   turn end and a pause (d −0.12 / −0.14 vs mid-turn), so it marks a coming stop, not a pause; the "planning event"
   verdict is withdrawn. Seamless also shows extra head movement ~1 s before a turn end (d +0.41 vs mid-turn). Fixed in
   the hypotheses file (S4–S6), the findings file, the report, and spec §3 metric 4.
+- **Filler split at turn ends, 2026-11-09** (`cue_checks.py --only-filler`): on CANDOR the extra early head stillness
+  belongs to hesitation fillers (um/uh) only — pauses after one are stiller than other pauses by d −0.28 half a second
+  out; trail-off connectives (so/and/but) add nothing; ordinary-word pauses and turn ends slow equally (−0.18 / −0.16).
+  Seamless transcripts carry almost no hesitation fillers, so untested there.
 - **Next:** (1) the remaining bid-study analyses on CANDOR (abandoned bids, slices by quality flags / know-your-partner,
   backchannels) and the words-in-last-second split of CANDOR's pre-end smile of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder
