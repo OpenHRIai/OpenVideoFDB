@@ -189,6 +189,22 @@ in-domain audio heads on Seamless dev, the face changes turn-end-vs-pause AUC by
 case does not rest on this: it measures whether an agent's face behaves like a human's, not whether a face helps a
 detector; metric 5 (visual gain) should be expected near zero for humans with a strong audio model.
 
+*Two human references, and which one fits the benchmark (2026-11-09; hypotheses file §11).* Seamless is same-room talk
+between mostly acquainted people; CANDOR is video calls between strangers. The cues that differ (CANDOR only: the
+listener's readiness seconds ahead, the speaker's smile before ending; Seamless only: a stiller head into a pause than
+into a turn end; blink after a turn end with opposite signs) are confirmed on unseen data on the corpus where they were
+claimed, so they are properties of the setting, not noise. The literature supports the direction for smiling (more on
+video among strangers) and for head motion (smaller on video) and has no study of the listener's pre-speech signals in
+both media; medium and relationship are confounded here. **An agent in this benchmark meets an unknown user over a video
+link, which is the CANDOR setting.** Report both references; do not treat CANDOR-side cues as artefacts. *Training data
+(exploratory, `scripts/cue_transfer.py`):* Seamless-only models trained on both tracked splits (about 130 conversations per
+fold) reach 0.638 [0.61, 0.66] on the start cue and 0.632 on turn end vs mid-turn, so gate 1's start-cue criterion is
+within reach on Seamless with more data; turn end vs pause before the stop stays at 0.59 in every variant. A CANDOR-only
+model scores 0.655 on the Seamless start cue (the cue transfers across settings); mixing corpora adds nothing over
+Seamless-only training. Decision: the Seamless reference models are trained on Seamless only. A 300-conversation subset of
+the Seamless train split (156 stranger / 144 acquainted pairs) is being tracked for a five-times-larger training set and
+for the strangers-vs-acquainted contrast.
+
 ## 2. Model
 
 One backbone, three modes, trained with modality dropout so audio-only, visual-only and audio-visual scores

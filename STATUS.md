@@ -115,6 +115,17 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   number passes.** Not confirmed: the Seamless listener's floor-taking growing in the first 0.3 s of silence. On top of
   the in-domain audio heads (Seamless dev) the face adds +0.008 / −0.001 / +0.004 AUC at −0.4 / 0 / +0.3 s, none
   distinguishable from zero; with the frozen Smart Turn v3.2 +0.022 / +0.001 / +0.017. Spec §1b and §3 annotated.
+- **Corpus differences kept as findings, 2026-11-09** (hypotheses file §11, spec §1b): CANDOR-only cues (listener
+  readiness seconds ahead, pre-end smile) and Seamless-only cues (stiller head into a pause) are confirmed on unseen data
+  where claimed; literature supports the direction for smiling and head motion, nothing published on the listener's
+  pre-speech signals in both media; medium and relationship confounded. The benchmark's agent setting (unknown user,
+  video link) matches CANDOR. **Exploratory training-data check** (`scripts/cue_transfer.py`): Seamless-only on both
+  tracked splits → start cue 0.638 [0.61, 0.66], end vs mid-turn 0.632, end vs pause before the stop 0.587; CANDOR-only
+  model on Seamless dev start cue 0.655; mixing adds nothing. Maintainer decision: Seamless models on Seamless only.
+  **In progress:** tracking 600 videos of a 300-conversation Seamless train subset (156 stranger / 144 acquainted) into
+  `data/seamless/lanes/train` (`scripts/seamless_fetch_lanes.py`, log `data/seamless/lanes/train_extract.log`; the
+  subset list is `data/r2/seamless/train_subset300.csv` in the private repo, seed 0); then the frozen Seamless-only
+  model on dev and the strangers-vs-acquainted contrast.
 - **Next:** (1) the remaining bid-study analyses on CANDOR (abandoned bids, slices by quality flags / know-your-partner,
   backchannels) and the words-in-last-second split of CANDOR's pre-end smile of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder
