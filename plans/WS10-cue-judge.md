@@ -228,6 +228,12 @@ CANDOR). (4) **Strangers vs acquainted pairs in the same room (180 vs 238 conver
 strangers show no readiness posture (+0.05 [−0.07, +0.18]; CANDOR +0.36), no pre-end smile (−0.04; CANDOR +0.19) and
 fewer blinks after a turn end (−0.23; CANDOR +0.24). So being strangers does not produce the CANDOR-side cues; the medium
 and the other corpus differences remain.
+**Hold-out rule for the other 700 train conversations (fixed 2026-11-10 07:40, while their tracking ran and before any
+was scored):** the first 200 conversations of the seeded order in which they are tracked (seed 1,
+`seamless_train_subset.py --rest-out`) are a fresh hold-out, scored once by models trained on test + subset + the other
+500; the full protocol table is decided on it by the protocol's rules (`cue_seamless_scale.py` part 6). It settles whether
+turn end vs pause before the stop is 0.58 (dev) or 0.64 (test, subset) on unseen Seamless, and gives the Seamless human
+reference for metric 1b.
 
 ## 2. Model
 

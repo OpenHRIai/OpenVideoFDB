@@ -141,8 +141,11 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   the lid open (`caffeinate -is` cannot stop lid-closed sleep on battery). Tracking the other 700 train
   conversations (1,400 videos, about 9 h, six workers) into the same `data/seamless/lanes/train`, log
   `data/seamless/lanes/train_rest_extract.log`; file order from `seamless_train_subset.py --rest-out` (seed 1, so an
-  interrupted run leaves a random sample; rerunning skips tracked files). Then rerun `cue_seamless_scale.py` with the
-  extra conversations as training data. **Not done:** audio-plus-visual on CANDOR; the judge's GRU heads (phase 1).
+  interrupted run leaves a random sample; rerunning skips tracked files). Hold-out rule fixed 2026-11-10 07:40, before any of them was scored: the
+  first 200 conversations of that order are a fresh hold-out (`seamless_train_subset.py holdout()`), the other 500 are
+  training. `cue_seamless_scale.py` now loads five sets (test, train subset, train extra, hold-out, dev), fits the
+  'all training' models on the first three, scores them on dev and the hold-out, and decides the full protocol table on
+  the hold-out by the protocol's rules (part 6; dry run passes). Then rerun it when the tracking is done. **Not done:** audio-plus-visual on CANDOR; the judge's GRU heads (phase 1).
 - **Next:** (1) the remaining bid-study analyses on CANDOR (abandoned bids, slices by quality flags / know-your-partner,
   backchannels) and the words-in-last-second split of CANDOR's pre-end smile of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder
