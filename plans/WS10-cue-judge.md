@@ -201,9 +201,29 @@ link, which is the CANDOR setting.** Report both references; do not treat CANDOR
 fold) reach 0.638 [0.61, 0.66] on the start cue and 0.632 on turn end vs mid-turn, so gate 1's start-cue criterion is
 within reach on Seamless with more data; turn end vs pause before the stop stays at 0.59 in every variant. A CANDOR-only
 model scores 0.655 on the Seamless start cue (the cue transfers across settings); mixing corpora adds nothing over
-Seamless-only training. Decision: the Seamless reference models are trained on Seamless only. A 300-conversation subset of
-the Seamless train split (156 stranger / 144 acquainted pairs) is being tracked for a five-times-larger training set and
-for the strangers-vs-acquainted contrast.
+Seamless-only training. Decision: the Seamless reference models are trained on Seamless only.
+
+*Seamless only, five times the data (2026-11-09, exploratory; private repo `scripts/seamless_train_subset.py`,
+`scripts/cue_seamless_scale.py`, hypotheses file §10 and §11).* 300 conversations of the Seamless train split (156 stranger
+/ 144 acquainted pairs, drawn with a fixed seed before any video was opened; 600 videos tracked into
+`data/seamless/lanes/train`, face found 97.7 %, no failures) give 1,846 more turn ends. **Seamless-only models trained on
+test + this subset (353 conversations) and scored unchanged on dev:** start cue 0.653 [0.61, 0.69] (was 0.579; the same
+model on a face from another conversation 0.525), turn end vs mid-turn 0.631 [0.60, 0.66] (was 0.597), turn end vs pause
+at +0.3 s 0.701 (was 0.674), turn end vs pause at −0.3 s 0.583 [0.54, 0.62] (was 0.578). Start cue and turn end vs
+mid-turn are still rising with data. **Cross-validated over all 424 tracked Seamless conversations:** 0.660 / 0.644 /
+0.735 / 0.627 in the same order, against 0.700 / 0.679 / 0.722 / 0.643 on CANDOR; dev is the low set for turn end vs pause
+before the stop (0.578 for dev events in that run, 0.64 for the others). **Consequences:** (1) gate 1's start-cue
+criterion is met on unseen Seamless by a plain Seamless-only model, and so is metric 1; metric 1b sits at 0.58–0.63 on
+Seamless and is not secured on dev. (2) Most of the earlier Seamless-vs-CANDOR gap in the model scores was training-set
+size, not setting. Use the cross-validated values as the Seamless human reference. (3) The frozen test-trained models and
+protocol statistics on the subset as a second unseen set: 14 of 16 primary tests confirmed; the growth of floor-taking in
+the silence fails again (−0.019), and "stiller head into a pause than into a turn end" does not replicate (+0.02
+[−0.04, +0.08]) and is no longer a Seamless-side cue. Gaze back to the partner, turn end minus pause, is +15.2 pp pooled,
+the same size as on CANDOR. Blink and downward gaze rise before a listener speaks on Seamless (+0.19, +0.24; near zero on
+CANDOR). (4) **Strangers vs acquainted pairs in the same room (180 vs 238 conversations): no statistic differs.** Seamless
+strangers show no readiness posture (+0.05 [−0.07, +0.18]; CANDOR +0.36), no pre-end smile (−0.04; CANDOR +0.19) and
+fewer blinks after a turn end (−0.23; CANDOR +0.24). So being strangers does not produce the CANDOR-side cues; the medium
+and the other corpus differences remain.
 
 ## 2. Model
 
@@ -258,7 +278,8 @@ Per run, per mode (A, V, AV), with conversation-level bootstrap CIs (clips as th
 1b. **Yield-vs-hold AUC before the stop** *(added 2026-11-09; headline pre-stop yield measure)* — `p_eager` at offset −
    0.3 s on completes vs incompletes (turn end coming vs pause coming). Metric 1 also rewards any sign that speech is
    about to stop (a coming pause scores 0.56 against mid-turn speech); 1b does not. Human reference on unseen data:
-   0.578 Seamless, 0.643 CANDOR, with gaze relative to the partner among the inputs.
+   0.578 Seamless dev (0.583 with five times the training data; 0.627 [0.61, 0.64] cross-validated over all 424 tracked
+   Seamless conversations), 0.643 CANDOR, with gaze relative to the partner among the inputs.
 2. **Yield horizon** *(2026-11-08: ≈ 0 for humans — see §1b yield timing; report it, but the headline yield measure is 2b)* — on completes, the earliest time before the acoustic offset at which `p_eager` stays
    above θ_eager until the offset; θ_eager fitted on Seamless human data for ≤ 10 % withdrawn signals.
    Report detection rate and median horizon (ms). Missed = 0.

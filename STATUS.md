@@ -122,10 +122,19 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   video link) matches CANDOR. **Exploratory training-data check** (`scripts/cue_transfer.py`): Seamless-only on both
   tracked splits → start cue 0.638 [0.61, 0.66], end vs mid-turn 0.632, end vs pause before the stop 0.587; CANDOR-only
   model on Seamless dev start cue 0.655; mixing adds nothing. Maintainer decision: Seamless models on Seamless only.
-  **In progress:** tracking 600 videos of a 300-conversation Seamless train subset (156 stranger / 144 acquainted) into
-  `data/seamless/lanes/train` (`scripts/seamless_fetch_lanes.py`, log `data/seamless/lanes/train_extract.log`; the
-  subset list is `data/r2/seamless/train_subset300.csv` in the private repo, seed 0); then the frozen Seamless-only
-  model on dev and the strangers-vs-acquainted contrast.
+- **Seamless only, five times the data, 2026-11-09 (exploratory)** (private repo `scripts/seamless_train_subset.py`,
+  `scripts/cue_seamless_scale.py`, `runs/r2/cues/confirm/scale.md`; hypotheses file §10/§11, spec §1b and metric 1b):
+  600 videos of a 300-conversation Seamless train subset (156 stranger / 144 acquainted, fixed seed) tracked into
+  `data/seamless/lanes/train` (97.7 % face found, 0 failures, 1.2 GB; videos deleted). Seamless-only models on test +
+  subset (353 conversations), scored unchanged on dev: start cue 0.653 [0.61, 0.69] (was 0.579, control 0.525), end vs
+  mid-turn 0.631 (was 0.597), end vs pause at +0.3 s 0.701, end vs pause at −0.3 s 0.583 (unchanged). Cross-validated
+  over all 424 tracked conversations: 0.660 / 0.644 / 0.735 / 0.627; dev is the low set for end vs pause before the
+  stop. Gate 1's start-cue criterion is met on unseen Seamless; most of the earlier gap to CANDOR was training-set size.
+  Frozen protocol on the subset: 14 of 16 primary tests confirmed; floor-taking growth in the silence fails again;
+  "stiller head into a pause" does not replicate. Strangers vs acquainted in the same room: no statistic differs, and
+  Seamless strangers show neither the readiness posture nor the pre-end smile nor the post-end blink of CANDOR, so
+  relationship does not produce the CANDOR-side cues. **Not done:** the other 700 train conversations (about 12 h of
+  tracking); audio-plus-visual on CANDOR; the judge's GRU heads (phase 1).
 - **Next:** (1) the remaining bid-study analyses on CANDOR (abandoned bids, slices by quality flags / know-your-partner,
   backchannels) and the words-in-last-second split of CANDOR's pre-end smile of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder
