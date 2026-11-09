@@ -103,6 +103,18 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
 - **Partner gaze in the yield decoder, 2026-11-09** (`scripts/cue_gaze_decode.py`): end-vs-pause AUC with the four
   partner-gaze columns added — Seamless 0.605 at −0.3 s, 0.726 at +0.3 s (from 0.560 / 0.681); CANDOR 0.641 / 0.720 (from
   0.621 / 0.696). New human reference for metrics 2 and 2b; the judge's inputs should include partner-referenced gaze.
+- **Confirmation on unseen data, 2026-11-09** (private repo `scripts/cue_confirm.py`, `scripts/cue_av_gain.py`; hypotheses
+  file §9 protocol frozen before scoring, §10 results). Hold-outs: Seamless dev (162 videos fetched and tracked with
+  `lanes`, tracks in `data/seamless/lanes/dev`, videos deleted) and 12,000 turn ends / 24,000 pauses of CANDOR never
+  sampled before, from the conversation half not used for fitting. Models fitted on the seen data, applied unchanged.
+  CANDOR 18 of 18 primary tests confirmed; Seamless 15 of 16 (four smaller than stated). Human reference on unseen
+  data, Seamless / CANDOR: start cue at −0.3 s 0.579 [0.54, 0.61] / 0.700; turn end vs pause at −0.3 s 0.578 [0.54, 0.61]
+  / 0.643, at +0.3 s 0.674 / 0.722, at +1.0 s 0.764 / 0.754; turn end vs mid-turn at −0.3 s 0.597 / 0.679; gaze at the
+  partner, end minus pause +9.1 / +14.0 pp; every model on a face from another conversation 0.50–0.51. **Gate 1 on
+  unseen Seamless with the plain model: both pre-event numbers sit just under 0.60 (intervals reach it), the post-stop
+  number passes.** Not confirmed: the Seamless listener's floor-taking growing in the first 0.3 s of silence. On top of
+  the in-domain audio heads (Seamless dev) the face adds +0.008 / −0.001 / +0.004 AUC at −0.4 / 0 / +0.3 s, none
+  distinguishable from zero; with the frozen Smart Turn v3.2 +0.022 / +0.001 / +0.017. Spec §1b and §3 annotated.
 - **Next:** (1) the remaining bid-study analyses on CANDOR (abandoned bids, slices by quality flags / know-your-partner,
   backchannels) and the words-in-last-second split of CANDOR's pre-end smile of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder

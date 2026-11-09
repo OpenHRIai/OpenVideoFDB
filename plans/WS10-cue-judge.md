@@ -167,6 +167,28 @@ to the 65 features raise end-vs-pause AUC at −0.3 / 0 / +0.3 / +1.0 s from 0.5
 0.770 on Seamless and from 0.621 / 0.652 / 0.696 / 0.727 to 0.641 / 0.673 / 0.720 / 0.751 on CANDOR (paired CIs exclude 0). These
 supersede the earlier human reference for metrics 2 and 2b.
 
+*Confirmation on unseen data (2026-11-09; private repo `scripts/cue_confirm.py`, hypotheses file §9 protocol and §10
+results).* The claims above were tested once under a protocol committed beforehand, with models fitted on the data above
+and applied unchanged to Seamless dev (566 turn ends) and to 12,000 CANDOR turn ends never sampled before, from the
+conversation half not used for fitting. CANDOR: 18 of 18 primary tests confirmed, values within 0.01 AUC of the earlier
+ones. Seamless: 15 of 16 confirmed, values lower than above. **Human reference from unseen data (use these, not the
+numbers above), Seamless / CANDOR:** start cue at −0.3 s 0.579 [0.54, 0.61] / 0.700 [0.69, 0.71]; turn end vs pause at
+−0.3 s 0.578 [0.54, 0.61] / 0.643 [0.64, 0.65], at +0.3 s 0.674 [0.64, 0.70] / 0.722 [0.71, 0.73], at +1.0 s 0.764 / 0.754;
+turn end vs mid-turn at −0.3 s 0.597 [0.57, 0.63] / 0.679 (a coming pause vs mid-turn is 0.560 / 0.568, so this contrast
+is partly "about to stop for any reason"); gaze at the partner in the last 0.5 s, turn end minus pause, +9.1 pp
+[+2.8, +14.9] / +14.0 pp. The same models on a face from another conversation score 0.50–0.51 on both. **Consequences:**
+(1) gate 1 with the plain model on unseen Seamless is not met before the event (0.58 on both sides, intervals reaching
+0.60) and is met after the stop; the judge's GRU heads, trained on far more than 65 conversations, have to clear it.
+(2) The headline yield measure before the stop should be turn end vs pause (metric 1b below), with turn end vs mid-turn
+kept as a secondary number. (3) Withdrawn: "on task talk the user's face in a silence separates floor-taking from waiting
+from ≈ 300 ms in" — on Seamless dev the taker-vs-non-taker AUC does not grow in the first 0.3 s of silence (+0.013
+[−0.03, +0.05]). (4) CANDOR-only cues (readiness posture, pre-end smile, still head with um / uh) are confirmed on CANDOR
+and absent or untestable on Seamless: inputs, never rules. *Audio plus visual (`scripts/cue_av_gain.py`):* added to the
+in-domain audio heads on Seamless dev, the face changes turn-end-vs-pause AUC by +0.008 / −0.001 / +0.004 at −0.4 / 0 /
++0.3 s, none distinguishable from zero (frozen Smart Turn v3.2 as the audio model: +0.022 / +0.001 / +0.017). The judge's
+case does not rest on this: it measures whether an agent's face behaves like a human's, not whether a face helps a
+detector; metric 5 (visual gain) should be expected near zero for humans with a strong audio model.
+
 ## 2. Model
 
 One backbone, three modes, trained with modality dropout so audio-only, visual-only and audio-visual scores
@@ -217,6 +239,10 @@ Events come from the run's own channels with the WS9 outcome rules applied to (a
 Per run, per mode (A, V, AV), with conversation-level bootstrap CIs (clips as the resampling unit):
 
 1. **Yield-cue AUC** — `p_eager` at offset − 0.3 s on completes vs mid-turn negatives. Chance 0.5.
+1b. **Yield-vs-hold AUC before the stop** *(added 2026-11-09; headline pre-stop yield measure)* — `p_eager` at offset −
+   0.3 s on completes vs incompletes (turn end coming vs pause coming). Metric 1 also rewards any sign that speech is
+   about to stop (a coming pause scores 0.56 against mid-turn speech); 1b does not. Human reference on unseen data:
+   0.578 Seamless, 0.643 CANDOR, with gaze relative to the partner among the inputs.
 2. **Yield horizon** *(2026-11-08: ≈ 0 for humans — see §1b yield timing; report it, but the headline yield measure is 2b)* — on completes, the earliest time before the acoustic offset at which `p_eager` stays
    above θ_eager until the offset; θ_eager fitted on Seamless human data for ≤ 10 % withdrawn signals.
    Report detection rate and median horizon (ms). Missed = 0.
