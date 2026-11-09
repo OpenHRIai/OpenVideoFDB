@@ -85,6 +85,10 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   and listener faces are near independent within an event (|ρ| ≤ 0.1, no lead): the yield-triggers-start idea has no
   support. (E) The mouth ramp is specific to turn starts: ~0.8–1.6 s before a turn, 0.1–0.5 s before a backchannel —
   relevant to metric 1 (an agent whose mouth opens only at onset reads as backchannelling).
+- **Correction 2026-11-09, head stillness:** it is a hold cue on Seamless only. On CANDOR the head slows equally before a
+  turn end and a pause (d −0.12 / −0.14 vs mid-turn), so it marks a coming stop, not a pause; the "planning event"
+  verdict is withdrawn. Seamless also shows extra head movement ~1 s before a turn end (d +0.41 vs mid-turn). Fixed in
+  the hypotheses file (S4–S6), the findings file, the report, and spec §3 metric 4.
 - **Next:** (1) the remaining bid-study analyses on CANDOR (abandoned bids, slices by quality flags / know-your-partner,
   backchannels) and the words-in-last-second split of CANDOR's pre-end smile of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder

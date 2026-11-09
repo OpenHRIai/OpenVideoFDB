@@ -139,7 +139,8 @@ draw the partner's file). *Offset:* the end-vs-pause signal arrives in the first
 (0.57 → 0.68 Seamless, 0.62 → 0.70 CANDOR from the window ending at −0.3 s to the one ending at +0.3 s); CANDOR adds a
 ≈ 1 s smile build-up before social turn ends that Seamless lacks. *Pause precursor:* the head goes still half a second
 before a within-turn pause on both corpora (d −0.32 / −0.14 at −0.3 s), decodable from head + gaze + eyes alone (0.58 /
-0.56) and not from the mouth — a hold cue. *Own display, not reaction:* with the listener removed (nobody speaks for
+0.56) and not from the mouth — a hold cue *(corrected 2026-11-09: on Seamless only. On CANDOR the head slows equally
+before a turn end, d −0.12 vs −0.14 before a pause, so stillness marks a coming stop, not a pause)*. *Own display, not reaction:* with the listener removed (nobody speaks for
 ≥ 1 s) ends still separate from pauses at 0.61–0.68, and aligned on the listener's onset the smile, gaze settling and
 blink suppression are already in place before the listener's first word. Metrics 2, 2b and 4 annotated accordingly.
 *Start cue is onset-locked, not offset-locked (report §1b):* split by the gap between the speaker's offset and the
@@ -221,7 +222,9 @@ Per run, per mode (A, V, AV), with conversation-level bootstrap CIs (clips as th
    live user's turn) stays out of reach in this harness, where the user is a recording; see §7.
 4. **Hold-cue FAR** — share of incomplete pauses on which `p_end(τ)` crosses the human-fitted θ(τ) table.
    *(2026-11-08: humans precede a within-turn pause with a still head from −0.5 s on both corpora; a secondary
-   "hold-cue agreement" — `p_end` falling when the speaker's head freezes into a silence — is worth reporting here.)*
+   "hold-cue agreement" — `p_end` falling when the speaker's head freezes into a silence — is worth reporting here.
+   Corrected 2026-11-09: that holds on Seamless only; on CANDOR stillness precedes turn ends equally, so the
+   secondary metric applies to the task-talk reference only and must not be built into the judge as a rule.)*
    For avatars this measures whether their pauses look like turn ends (TTS phrase breaks usually do).
 5. **Visual gain** — AV minus A for metrics 1 and 3; the number that survives the "TTS audio is cue-poor"
    objection.
