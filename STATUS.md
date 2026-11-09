@@ -134,8 +134,11 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   "stiller head into a pause" does not replicate. With the larger models in place of the frozen small one: floor-taking
   growth still absent (+0.007), listener's early taker sign 0.544 [0.53, 0.56] (present, half of CANDOR's 0.591). Strangers vs acquainted in the same room: no statistic differs, and
   Seamless strangers show neither the readiness posture nor the pre-end smile nor the post-end blink of CANDOR, so
-  relationship does not produce the CANDOR-side cues. **Not done:** the other 700 train conversations (about 12 h of
-  tracking); audio-plus-visual on CANDOR; the judge's GRU heads (phase 1).
+  relationship does not produce the CANDOR-side cues. **In progress since 2026-11-09 21:03:** tracking the other 700 train
+  conversations (1,400 videos, about 9 h, six workers) into the same `data/seamless/lanes/train`, log
+  `data/seamless/lanes/train_rest_extract.log`; file order from `seamless_train_subset.py --rest-out` (seed 1, so an
+  interrupted run leaves a random sample; rerunning skips tracked files). Then rerun `cue_seamless_scale.py` with the
+  extra conversations as training data. **Not done:** audio-plus-visual on CANDOR; the judge's GRU heads (phase 1).
 - **Next:** (1) the remaining bid-study analyses on CANDOR (abandoned bids, slices by quality flags / know-your-partner,
   backchannels) and the words-in-last-second split of CANDOR's pre-end smile of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder
