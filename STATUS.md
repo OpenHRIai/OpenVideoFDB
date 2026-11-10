@@ -168,6 +168,18 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   same-room cue. Relationship (382 vs 695 conversations) separates nothing. Seamless human reference for metric 1b:
   0.63–0.64. **Not done:** audio-plus-visual on CANDOR. The judge's GRU heads (phase 1) are done, next entry.
 - **WS10 phase 1, the judge's sequence heads — done 2026-11-11 (session 7, side session).** Small GRU heads (a GRU is a gated recurrent unit, a recurrent network that reads a sequence one step at a time) read the 10 Hz face tracks frame by frame for the four statistics the logistic stand-ins measure, on the stand-ins' own events, rows, per-file z-scores, frames and shuffled-face control (private repo `scripts/cue_gru.py`, report `docs/cue_gru_heads.md`, hypotheses file §10 'The judge's sequence heads', spec §1b last paragraph + phase 1 note). Trained on test + train subset + train extra (833 conversations), configuration chosen on dev only, the 187-conversation hold-out scored once: start cue **0.725** [0.70, 0.75] (logistic 0.644), turn end vs pause at −0.3 s **0.686** (0.628), at +0.3 s **0.787** (0.723), turn end vs mid-turn **0.689** (0.641); paired gains +0.05 to +0.08 with intervals excluding zero; controls 0.48–0.52. **Gate 1 met** with visual-only heads. The start-cue gap to CANDOR's logistic (0.700) was a model gap, not the setting. Before the stop most of the yield gain needs a 2 s window (+0.031 with 1 s, +0.058 with 2 s). Laptop CPU, about a minute per configuration and seed; the overnight runs stalled while the lid was closed on battery (wall clock only). Not built: audio branch / modality dropout, 10 Hz runner (phase 2), CANDOR GRU for the other reference.
+- **Plot report brought up to the full Seamless data, 2026-11-11** (private repo `docs/cue_timing.md`, the document that
+  embeds the figures). The four cue scripts take `--split all` (a combined corpus class reads test, dev and train) and
+  were rerun on all 1,091 conversations (`runs/r2/cues/{onset,offset,gaze,checks}_all/`, figures `seamless_all_*.png`);
+  `scripts/cue_summary_figs.py` draws two summary figures from stored results (the two corpora side by side per
+  statistic; the Seamless learning curves). The report opens with a summary of agreements and disagreements, has
+  full-data rows in every table, and new sections on partner gaze, matched checks, and unseen-data results including the
+  GRU hold-out scores. Withdrawn there: head stillness as a hold cue (difference +0.06 on full Seamless, CANDOR +0.04),
+  and 'the Seamless listener foretells nothing' (0.56 against CANDOR's 0.59). New from the matched checks: the start cue
+  is specific to turn starts on both corpora (backchannels ramp for 0.5 s at a fifth of the size); the pre-end smile
+  exists on both where a turn trails off without words, and only on CANDOR where it ends on a word. Model scores are
+  comparable across corpora only between like models: no GRU has been trained on CANDOR. The first checks run crashed
+  overnight (the combined corpus returned no backchannels; fixed, rerun in 2 min).
 - **Next:** (1) the remaining bid-study analyses on CANDOR (abandoned bids, slices by quality flags / know-your-partner,
   backchannels) and the words-in-last-second split of CANDOR's pre-end smile of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder
