@@ -134,7 +134,7 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   "stiller head into a pause" does not replicate. With the larger models in place of the frozen small one: floor-taking
   growth still absent (+0.007), listener's early taker sign 0.544 [0.53, 0.56] (present, half of CANDOR's 0.591). Strangers vs acquainted in the same room: no statistic differs, and
   Seamless strangers show neither the readiness posture nor the pre-end smile nor the post-end blink of CANDOR, so
-  relationship does not produce the CANDOR-side cues. **In progress since 2026-11-09 21:03, restarted 2026-11-10 07:34:** the first run froze at 22:29 when the lid
+  relationship does not produce the CANDOR-side cues. **Tracking the other 700 train conversations (started 2026-11-09 21:03, restarted 2026-11-10 07:34, done 2026-11-10 by 15:45):** the first run froze at 22:29 when the lid
   was closed on battery: the six open downloads kept dead sockets forever because the loader streamed with no
   timeout (`ovfdb/data/seamless.py`, fixed to 60 s per chunk; the fetch script now retries a download three
   times). 123 of 1,400 videos were done at the restart; the rest take about 9 h more with the Mac plugged in and
@@ -151,7 +151,21 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   Modal volume `seamless-lanes` under `/train/<file_id>/`; `--download DIR` copies them into `data/seamless/lanes/train`,
   skipping files already there. On a file tracked both ways the tracks differ by about 1 % of each feature's spread
   (correlation ≥ 0.9998, same face-found flags): x86 vs Apple Silicon inference noise, negligible for the models. The
-  laptop run had reached 1,021 of 1,400 when the remaining 378 were submitted to Modal (60 containers). **Not done:** audio-plus-visual on CANDOR; the judge's GRU heads (phase 1).
+  laptop run had reached 1,021 of 1,400 when the remaining 378 were submitted to Modal (60 containers).
+  **Done 2026-11-10 20:15.** All 2,000 train videos tracked (1,032 + 1 retry on the laptop, 378 on Modal in 5 min; 0
+  failures; 3.9 GB), verified complete and loadable. Rerun of `cue_seamless_scale.py` (`runs/r2/cues/confirm/scale2.md`;
+  hypotheses file §10 'All of Seamless and a fresh hold-out', §11 update; findings §10 addendum; spec §1 and metric 1b):
+  the fresh 187-conversation hold-out scored once by 833-conversation models confirms 14 of 16 primary tests, the same
+  14 as dev and the subset (floor-taking growth and stiller-head-into-a-pause dropped for Seamless; pooled +0.017 and
+  +0.060, real and small); turn end vs pause before the stop is 0.628 [0.60, 0.65] on the hold-out and 0.639 [0.63,
+  0.65] cross-validated over 1,091 conversations, equal to CANDOR's 0.643, with dev the odd set at 0.59 for an unknown
+  reason; start cue 0.644 hold-out / 0.657 CV (CANDOR 0.700); turn end vs mid-turn 0.641 / 0.651 (0.679); end vs pause
+  at +0.3 s 0.723 / 0.739 (0.722); controls 0.48–0.51. Learning curves flat from 353 to 833 conversations (≤ +0.013), so
+  the remaining start-cue gap to CANDOR is not data size. Listener's early taker sign 0.558 (present, half of CANDOR);
+  readiness posture +0.09 (small, a quarter of CANDOR, same for strangers and acquainted); hesitation stillness (S6) now
+  measurable on Seamless and matches CANDOR (−0.195 vs −0.222); blink and downward gaze before speaking confirmed as a
+  same-room cue. Relationship (382 vs 695 conversations) separates nothing. Seamless human reference for metric 1b:
+  0.63–0.64. **Not done:** audio-plus-visual on CANDOR; the judge's GRU heads (phase 1).
 - **Next:** (1) the remaining bid-study analyses on CANDOR (abandoned bids, slices by quality flags / know-your-partner,
   backchannels) and the words-in-last-second split of CANDOR's pre-end smile of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder

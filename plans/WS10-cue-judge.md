@@ -233,7 +233,21 @@ was scored):** the first 200 conversations of the seeded order in which they are
 `seamless_train_subset.py --rest-out`) are a fresh hold-out, scored once by models trained on test + subset + the other
 500; the full protocol table is decided on it by the protocol's rules (`cue_seamless_scale.py` part 6). It settles whether
 turn end vs pause before the stop is 0.58 (dev) or 0.64 (test, subset) on unseen Seamless, and gives the Seamless human
-reference for metric 1b.
+reference for metric 1b. **Result (2026-11-10 20:15; all 1,000 train conversations tracked, the last 378 on Modal with
+`modal_seamless_lanes.py`; `runs/r2/cues/confirm/scale2.md`; hypotheses file §10 'All of Seamless and a fresh
+hold-out'):** models fitted on 833 Seamless conversations, scored once on the 187 hold-out conversations with a turn end
+(1,079 ends, 6,610 pauses): start cue 0.644 [0.62, 0.67], turn end vs pause at −0.3 s 0.628 [0.60, 0.65], at +0.3 s
+0.723 [0.70, 0.75], turn end vs mid-turn 0.641 [0.62, 0.66]; controls 0.48–0.51; 14 of 16 primary tests confirmed, the
+same 14 as on dev and the subset (floor-taking growth +0.014 and stiller head into a pause +0.042 fail a third time and
+are dropped for Seamless; pooled over all events they are +0.017 [0.007, 0.028] and +0.060 [+0.03, +0.09], real and
+small). Cross-validated over all 1,091 tracked Seamless conversations: 0.657 / 0.651 / 0.739 / 0.639 (start, mid-turn,
++0.3 s, −0.3 s); dev alone stays at 0.59 for turn end vs pause before the stop while every other set is 0.63–0.65, so
+dev is the odd set and the Seamless reference for metric 1b is 0.63–0.64, equal to CANDOR's 0.643. Learning curves
+have flattened (353 → 833 conversations: +0.013 on the start cue, ≤ +0.006 elsewhere), so the remaining start-cue gap
+to CANDOR (0.657 vs 0.700) is not training-set size; the judge's sequence heads are the next thing that could close
+it. The listener's early taker sign is 0.558 [0.55, 0.57] on Seamless (present, half of CANDOR's 0.591); the readiness
+posture is +0.09 [+0.04, +0.14] (small, a quarter of CANDOR's, identical for strangers and acquainted pairs).
+Relationship (382 vs 695 conversations) separates nothing.
 
 ## 2. Model
 
@@ -288,8 +302,9 @@ Per run, per mode (A, V, AV), with conversation-level bootstrap CIs (clips as th
 1b. **Yield-vs-hold AUC before the stop** *(added 2026-11-09; headline pre-stop yield measure)* — `p_eager` at offset −
    0.3 s on completes vs incompletes (turn end coming vs pause coming). Metric 1 also rewards any sign that speech is
    about to stop (a coming pause scores 0.56 against mid-turn speech); 1b does not. Human reference on unseen data:
-   0.578 Seamless dev (0.583 with five times the training data; 0.627 [0.61, 0.64] cross-validated over all 424 tracked
-   Seamless conversations), 0.643 CANDOR, with gaze relative to the partner among the inputs.
+   0.63–0.64 Seamless (0.628 [0.60, 0.65] on a fresh 187-conversation hold-out with 833-conversation models, 0.639
+   [0.63, 0.65] cross-validated over all 1,091 tracked conversations; the dev split alone is 0.59), 0.643 CANDOR, with
+   gaze relative to the partner among the inputs.
 2. **Yield horizon** *(2026-11-08: ≈ 0 for humans — see §1b yield timing; report it, but the headline yield measure is 2b)* — on completes, the earliest time before the acoustic offset at which `p_eager` stays
    above θ_eager until the offset; θ_eager fitted on Seamless human data for ≤ 10 % withdrawn signals.
    Report detection rate and median horizon (ms). Missed = 0.
