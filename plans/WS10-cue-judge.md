@@ -4,9 +4,10 @@
 runs with `agent.mp4`), the R2 track pipeline and audio heads in `smart-turn-multimodal-private`
 (`eot/model_av.py`, `scripts/r2_*.py`, Modal volume `smart-turn-v2`), and the bid study's findings
 (`docs/r2_floor_bids.md` on branch `r2-floor-bids` of that repo, done 2026-10-27, see §1b). **Est.:** 8–12
-working days across four phases, with a kill gate after phase 1. **Status 2026-11-08:** spec + phase 1a done;
-phase 0 started (`ovfdb/score/lanes.py` extractor done and run on CANDOR; `cues.py` not started); CANDOR replication
-pilot done (§1b), full run pending; phase 1 not started.
+working days across four phases, with a kill gate after phase 1. **Status 2026-11-11:** spec, phase 1a, phase 0 (`lanes.py`, `cues.py`)
+and the CANDOR replication done; **phase 1 done in its visual-only form** (GRU heads on the open-extractor tracks, §1b
+last paragraph: gate 1 met on a fresh hold-out, start cue 0.725, yield cue 0.689); the audio branch and modality dropout
+of §2 and the 10 Hz runner of phase 2 are not built.
 **Files (this repo):** `ovfdb/score/lanes.py`, `ovfdb/score/cues.py`, `ovfdb/score/cue_judge.py`,
 `ovfdb/cli.py` (`score-cues`), `ovfdb/score/report.py` (one new table), `tests/test_cues.py`,
 `results/cues_*.md`, `docs/protocol.md` §11 (new). Training code stays in the private repo; this repo
@@ -249,6 +250,33 @@ it. The listener's early taker sign is 0.558 [0.55, 0.57] on Seamless (present, 
 posture is +0.09 [+0.04, +0.14] (small, a quarter of CANDOR's, identical for strangers and acquainted pairs).
 Relationship (382 vs 695 conversations) separates nothing.
 
+**The judge's sequence heads (phase 1, 2026-11-11; private repo `scripts/cue_gru.py`, report `docs/cue_gru_heads.md`,
+hypotheses file §10 'The judge's sequence heads').** A GRU head (gated recurrent unit: a recurrent network that reads the
+window's 10 Hz face frames one at a time and turns its final state into one logit; 65 face features for the listener, 69
+with the gaze-to-partner columns for the speaker, plus a face-found flag) per statistic, on exactly the stand-ins' events,
+rows, per-file z-scores, frames and shuffled-face control (their features recomputed from the stored windows match to
+1e-4). One forced change: frames after the other party speaks again are blank in the stacks and their count differs a
+little between turn ends and pauses 0.3 s into the silence (AUC 0.53 alone), so each GRU window ends at the last frame
+before anyone speaks again. Trained on the 833 training conversations; hidden size, dropout and context (1 s = the
+stand-in's window, or 2 s; 3 s for the listener) chosen on dev only, three seeds averaged; the 187-conversation hold-out
+scored once.
+
+| statistic (metric) | logistic stand-in, hold-out | GRU heads, hold-out | paired difference | GRU control | CANDOR, logistic |
+|---|---|---|---|---|---|
+| start cue, 0.3 s before the first word (3) | 0.644 [0.62, 0.67] | **0.725 [0.70, 0.75]** | +0.080 [+0.06, +0.10] | 0.524 | 0.700 |
+| turn end vs pause, 0.3 s before the stop (1b) | 0.628 [0.60, 0.65] | **0.686 [0.66, 0.71]** | +0.058 [+0.04, +0.08] | 0.503 | 0.643 |
+| turn end vs pause, 0.3 s into the silence (2b) | 0.723 [0.70, 0.75] | **0.787 [0.77, 0.81]** | +0.064 [+0.05, +0.08] | 0.491 | 0.722 |
+| turn end vs mid-turn speech, 0.3 s before the stop (1) | 0.641 [0.62, 0.66] | **0.689 [0.67, 0.71]** | +0.048 [+0.03, +0.06] | 0.484 | 0.679 |
+
+The sequence heads beat the window summaries on every statistic, by +0.05 to +0.08 AUC with paired intervals excluding
+zero and controls at chance. The start-cue gap to CANDOR was a model gap, not the setting: the Seamless GRU (0.725) is
+above CANDOR's logistic (0.700); a CANDOR GRU is the next comparison. Before the stop, most of the yield gain needs the
+second-to-last second (1 s window +0.031, 2 s window +0.058). **Gate 1 is met on a fresh hold-out with visual-only heads**
+(start 0.725, yield 0.689, both ≥ 0.60, controls ≤ 0.53). These are the Seamless human references for metrics 1, 1b, 2b
+and 3 from now on; the logistic values stay as the floor a window-summary judge would reach. Dev was the selection set
+(its values 0.00–0.04 above the hold-out's); visual only, windows anchored on known events, 2 s the longest context the
+stacks allow before the stop.
+
 ## 2. Model
 
 One backbone, three modes, trained with modality dropout so audio-only, visual-only and audio-visual scores
@@ -304,7 +332,8 @@ Per run, per mode (A, V, AV), with conversation-level bootstrap CIs (clips as th
    about to stop (a coming pause scores 0.56 against mid-turn speech); 1b does not. Human reference on unseen data:
    0.63–0.64 Seamless (0.628 [0.60, 0.65] on a fresh 187-conversation hold-out with 833-conversation models, 0.639
    [0.63, 0.65] cross-validated over all 1,091 tracked conversations; the dev split alone is 0.59), 0.643 CANDOR, with
-   gaze relative to the partner among the inputs.
+   gaze relative to the partner among the inputs. *With the judge's own GRU heads (§1b, 2026-11-11): 0.686 [0.66, 0.71] on the same
+   hold-out; use that as the Seamless reference, the logistic value as the window-summary floor.*
 2. **Yield horizon** *(2026-11-08: ≈ 0 for humans — see §1b yield timing; report it, but the headline yield measure is 2b)* — on completes, the earliest time before the acoustic offset at which `p_eager` stays
    above θ_eager until the offset; θ_eager fitted on Seamless human data for ≤ 10 % withdrawn signals.
    Report detection rate and median horizon (ms). Missed = 0.
@@ -337,7 +366,8 @@ Per run, per mode (A, V, AV), with conversation-level bootstrap CIs (clips as th
 
 Judge validity on human data (phase 1 and 3 report, Seamless test split, 133 speaker files):
 
-- visual-only yield-cue AUC and start-cue AUC with CIs; **gate: both ≥ 0.60 and shuffled-video ≤ 0.53**;
+- visual-only yield-cue AUC and start-cue AUC with CIs; **gate: both ≥ 0.60 and shuffled-video ≤ 0.53**; *Met 2026-11-11 on the
+  187-conversation hold-out with visual-only GRU heads: start 0.725, yield 0.689, controls 0.48–0.52 (§1b).*
 - sensitivity: time-shift the human face track by +1 s and by −1 s, replace it with a static frame — the
   visual-only AUCs must fall towards chance monotonically with the degradation;
 - improvised vs naturalistic and per-site slices (Berner et al. found domain sensitivity).
@@ -377,6 +407,11 @@ fixed the horizons, the feature set and the label-noise estimate used from phase
 partner-face branch and measure 3b.
 
 **Phase 1 — visual-signal gate with the oracle features (2–3 days, private repo, Modal).**
+*Done 2026-11-11 in a different form (§1b, last paragraph): visual-only GRU heads on the open-extractor tracks of 833
+Seamless conversations, laptop CPU, four window-anchored heads instead of the 10 Hz `HeadsAV` runner, chosen on dev and
+scored once on the fresh hold-out. Gate 1 met: start cue 0.725, yield cue 0.689, controls ≤ 0.53. Not built: the audio
+branch and modality dropout, the `p_start(h)` horizons as streaming heads, the sensitivity curves of §3. The oracle
+features were dropped once phase 2's extractor question was settled for MediaPipe.*
 - Extend `HeadsAV`: `p_start(h)` heads (h = 0.4, 1 s) on the participant's own face, modality dropout,
   presence flags. Train on the R2 train tracks (two seeds, the R2 recipe and epoch selection on dev). The
   bid study's `scripts/r2_bids_common.py` already loads both participants' tracks and defines onsets,
