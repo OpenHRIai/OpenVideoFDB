@@ -145,7 +145,13 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   first 200 conversations of that order are a fresh hold-out (`seamless_train_subset.py holdout()`), the other 500 are
   training. `cue_seamless_scale.py` now loads five sets (test, train subset, train extra, hold-out, dev), fits the
   'all training' models on the first three, scores them on dev and the hold-out, and decides the full protocol table on
-  the hold-out by the protocol's rules (part 6; dry run passes). Then rerun it when the tracking is done. **Not done:** audio-plus-visual on CANDOR; the judge's GRU heads (phase 1).
+  the hold-out by the protocol's rules (part 6; dry run passes). Then rerun it when the tracking is done.
+  **Moved to Modal 2026-11-10 15:40** after a power scare: `modal_seamless_lanes.py` (private repo root) downloads each
+  video in a container, runs the same extractor with the laptop's library versions pinned, and writes the tracks to the
+  Modal volume `seamless-lanes` under `/train/<file_id>/`; `--download DIR` copies them into `data/seamless/lanes/train`,
+  skipping files already there. On a file tracked both ways the tracks differ by about 1 % of each feature's spread
+  (correlation ≥ 0.9998, same face-found flags): x86 vs Apple Silicon inference noise, negligible for the models. The
+  laptop run had reached 1,021 of 1,400 when the remaining 378 were submitted to Modal (60 containers). **Not done:** audio-plus-visual on CANDOR; the judge's GRU heads (phase 1).
 - **Next:** (1) the remaining bid-study analyses on CANDOR (abandoned bids, slices by quality flags / know-your-partner,
   backchannels) and the words-in-last-second split of CANDOR's pre-end smile of the bid study on the whole corpus
   and the Seamless/MediaPipe cell (157 local test videos) to separate site from extractor; (2) WS10 phase 0 remainder
