@@ -156,7 +156,8 @@ _Record any edit to `ovfdb/schema.py` or `ovfdb/harness/base.py` here so other s
   failures; 3.9 GB), verified complete and loadable. Rerun of `cue_seamless_scale.py` (`runs/r2/cues/confirm/scale2.md`;
   hypotheses file §10 'All of Seamless and a fresh hold-out', §11 update; findings §10 addendum; spec §1 and metric 1b):
   the fresh 187-conversation hold-out scored once by 833-conversation models confirms 14 of 16 primary tests, the same
-  14 as dev and the subset (floor-taking growth and stiller-head-into-a-pause dropped for Seamless; pooled +0.017 and
+  14 as the subset (dev had 15 of 16: stiller-head-into-a-pause passed there at +0.15; corrected 2026-11-11). Floor-taking
+  growth and stiller-head-into-a-pause are dropped for Seamless (the first fails on all three unseen sets; pooled +0.017 and
   +0.060, real and small); turn end vs pause before the stop is 0.628 [0.60, 0.65] on the hold-out and 0.639 [0.63,
   0.65] cross-validated over 1,091 conversations, equal to CANDOR's 0.643, with dev the odd set at 0.59 for an unknown
   reason; start cue 0.644 hold-out / 0.657 CV (CANDOR 0.700); turn end vs mid-turn 0.641 / 0.651 (0.679); end vs pause

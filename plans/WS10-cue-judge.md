@@ -239,8 +239,9 @@ reference for metric 1b. **Result (2026-11-10 20:15; all 1,000 train conversatio
 hold-out'):** models fitted on 833 Seamless conversations, scored once on the 187 hold-out conversations with a turn end
 (1,079 ends, 6,610 pauses): start cue 0.644 [0.62, 0.67], turn end vs pause at −0.3 s 0.628 [0.60, 0.65], at +0.3 s
 0.723 [0.70, 0.75], turn end vs mid-turn 0.641 [0.62, 0.66]; controls 0.48–0.51; 14 of 16 primary tests confirmed, the
-same 14 as on dev and the subset (floor-taking growth +0.014 and stiller head into a pause +0.042 fail a third time and
-are dropped for Seamless; pooled over all events they are +0.017 [0.007, 0.028] and +0.060 [+0.03, +0.09], real and
+same 14 as on the subset; dev had confirmed 15 of 16, with the stiller head passing at +0.15 (corrected 2026-11-11).
+Floor-taking growth (+0.014, failing on all three unseen sets) and stiller head into a pause (+0.042) are dropped for
+Seamless (pooled over all events they are +0.017 [0.007, 0.028] and +0.060 [+0.03, +0.09], real and
 small). Cross-validated over all 1,091 tracked Seamless conversations: 0.657 / 0.651 / 0.739 / 0.639 (start, mid-turn,
 +0.3 s, −0.3 s); dev alone stays at 0.59 for turn end vs pause before the stop while every other set is 0.63–0.65, so
 dev is the odd set and the Seamless reference for metric 1b is 0.63–0.64, equal to CANDOR's 0.643. Learning curves
