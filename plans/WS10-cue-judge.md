@@ -6,8 +6,9 @@ runs with `agent.mp4`), the R2 track pipeline and audio heads in `smart-turn-mul
 (`docs/r2_floor_bids.md` on branch `r2-floor-bids` of that repo, done 2026-10-27, see §1b). **Est.:** 8–12
 working days across four phases, with a kill gate after phase 1. **Status 2026-11-11:** spec, phase 1a, phase 0 (`lanes.py`, `cues.py`)
 and the CANDOR replication done; **phase 1 done in its visual-only form** (GRU heads on the open-extractor tracks, §1b
-last paragraph: gate 1 met on a fresh hold-out, start cue 0.725, yield cue 0.689); the audio branch and modality dropout
-of §2 and the 10 Hz runner of phase 2 are not built.
+last paragraph: gate 1 met on a fresh hold-out, start cue 0.725, yield cue 0.689), and the same heads trained on
+CANDOR for the second human reference (§1b, 'The sequence heads on CANDOR': start cue 0.769, yield cue 0.706); the audio
+branch and modality dropout of §2 and the 10 Hz runner of phase 2 are not built.
 **Files (this repo):** `ovfdb/score/lanes.py`, `ovfdb/score/cues.py`, `ovfdb/score/cue_judge.py`,
 `ovfdb/cli.py` (`score-cues`), `ovfdb/score/report.py` (one new table), `tests/test_cues.py`,
 `results/cues_*.md`, `docs/protocol.md` §11 (new). Training code stays in the private repo; this repo
@@ -270,13 +271,49 @@ scored once.
 | turn end vs mid-turn speech, 0.3 s before the stop (1) | 0.641 [0.62, 0.66] | **0.689 [0.67, 0.71]** | +0.048 [+0.03, +0.06] | 0.484 | 0.679 |
 
 The sequence heads beat the window summaries on every statistic, by +0.05 to +0.08 AUC with paired intervals excluding
-zero and controls at chance. The start-cue gap to CANDOR was a model gap, not the setting: the Seamless GRU (0.725) is
-above CANDOR's logistic (0.700); a CANDOR GRU is the next comparison. Before the stop, most of the yield gain needs the
+zero and controls at chance. *(Corrected the same day, next paragraph: an earlier version of this paragraph called the
+start-cue gap to CANDOR a model gap because the Seamless GRU, 0.725, is above CANDOR's logistic, 0.700. A CANDOR GRU
+reaches 0.769, so the gap stays between like models.)* Before the stop, most of the yield gain needs the
 second-to-last second (1 s window +0.031, 2 s window +0.058). **Gate 1 is met on a fresh hold-out with visual-only heads**
 (start 0.725, yield 0.689, both ≥ 0.60, controls ≤ 0.53). These are the Seamless human references for metrics 1, 1b, 2b
 and 3 from now on; the logistic values stay as the floor a window-summary judge would reach. Dev was the selection set
 (its values 0.00–0.04 above the hold-out's); visual only, windows anchored on known events, 2 s the longest context the
 stacks allow before the stop.
+
+**The sequence heads on CANDOR (2026-11-11; `scripts/cue_gru.py --corpus candor`, same report, second part; hypotheses
+file §10 'The sequence heads on CANDOR, and across corpora').** The same heads, grid, window rules and control, trained
+on CANDOR only, so that the two human references compare between like models. The split is the confirmatory protocol's:
+the GRUs are fitted on the exploration half (already-sampled events of one half of the conversations) minus a
+validation part (one conversation in five of that half, 144 conversations, used only for early stopping and for
+choosing the configuration), 608 conversations and 4,507–4,585 positives per statistic, about the size of the Seamless
+training sets; the hold-out (12,000 never-sampled turn ends and 24,000 pauses from the 839 conversations of the other
+half) was scored once. The logistic stand-in is the protocol's and reproduces its reported values.
+
+*Units: every cell is an AUC (0.5 = chance) except the two columns marked 'difference', which are differences between
+two AUCs; brackets are 95 % intervals from resampling whole conversations; 'control' is the same GRU on the face track
+of a file from another conversation.*
+
+| statistic (metric) | CANDOR logistic stand-in, hold-out | **CANDOR GRU heads, hold-out** | GRU − logistic on the same rows (difference) | CANDOR GRU control | Seamless GRU heads, hold-out | CANDOR − Seamless between GRUs (difference) |
+|---|---|---|---|---|---|---|
+| start cue, 0.3 s before the first word (3) | 0.700 [0.69, 0.71] | **0.769 [0.76, 0.78]** | +0.069 [+0.065, +0.073] | 0.495 | 0.725 [0.70, 0.75] | **+0.045 [+0.02, +0.07]** |
+| turn end vs pause, 0.3 s before the stop (1b) | 0.643 [0.64, 0.65] | **0.669 [0.66, 0.68]** | +0.026 [+0.021, +0.031] | 0.497 | 0.686 [0.66, 0.71] | −0.017 [−0.04, +0.01] |
+| turn end vs pause, 0.3 s into the silence (2b) | 0.722 [0.72, 0.73] | **0.761 [0.75, 0.77]** | +0.039 [+0.035, +0.042] | 0.498 | 0.787 [0.77, 0.81] | −0.026 [−0.05, −0.01] |
+| turn end vs mid-turn speech, 0.3 s before the stop (1) | 0.679 [0.67, 0.69] | **0.706 [0.70, 0.71]** | +0.027 [+0.023, +0.031] | 0.500 | 0.689 [0.67, 0.71] | +0.017 [−0.01, +0.04] |
+
+The sequence heads beat the window summaries on CANDOR as well, on all four statistics. **The start-cue gap between the
+corpora survives between sequence models**: +0.045 [+0.016, +0.074] (0.769 against 0.725), against +0.056 between the
+logistic models on the same two hold-outs; the sequence model lifts both corpora by the same amount within error
+(+0.069 and +0.080). A listener on a CANDOR call is easier to read just before speaking with either model class; the gap
+is a property of the corpus, not of the model (medium, kind of talk, population and recording remain confounded). The
+speaker statistics gain less on CANDOR than on Seamless and end within 0.03 of each other between the corpora; only
+'turn end vs pause into the silence' differs with an interval excluding zero, slightly higher on Seamless. **These are
+the CANDOR human references for metrics 1, 1b, 2b and 3** (0.706, 0.669, 0.761, 0.769); gate 1's criteria hold on
+CANDOR too. *Exploratory, outside the protocol:* each corpus's heads scored unchanged on the other corpus's hold-out
+lose 0.03–0.05 AUC against the heads trained there and stay far above chance (start cue: Seamless-trained 0.734 on
+CANDOR, CANDOR-trained 0.693 on Seamless; controls 0.49–0.52), so a judge trained on one corpus is usable on the other
+setting, at that cost, and each setting is best scored against the reference of a head trained on it. Limits: CANDOR
+has about twenty times more events than were used, so 0.769 is not a ceiling; the between-corpus intervals are as wide
+as the 187 Seamless hold-out conversations allow.
 
 ## 2. Model
 
@@ -334,7 +371,9 @@ Per run, per mode (A, V, AV), with conversation-level bootstrap CIs (clips as th
    0.63–0.64 Seamless (0.628 [0.60, 0.65] on a fresh 187-conversation hold-out with 833-conversation models, 0.639
    [0.63, 0.65] cross-validated over all 1,091 tracked conversations; the dev split alone is 0.59), 0.643 CANDOR, with
    gaze relative to the partner among the inputs. *With the judge's own GRU heads (§1b, 2026-11-11): 0.686 [0.66, 0.71] on the same
-   hold-out; use that as the Seamless reference, the logistic value as the window-summary floor.*
+   hold-out; use that as the Seamless reference, the logistic value as the window-summary floor. CANDOR-trained GRU heads
+   on the CANDOR hold-out: 0.669 [0.66, 0.68] (AUC, 95 % interval); use that as the CANDOR reference. The two do not
+   differ reliably (−0.017 [−0.04, +0.01]).*
 2. **Yield horizon** *(2026-11-08: ≈ 0 for humans — see §1b yield timing; report it, but the headline yield measure is 2b)* — on completes, the earliest time before the acoustic offset at which `p_eager` stays
    above θ_eager until the offset; θ_eager fitted on Seamless human data for ≤ 10 % withdrawn signals.
    Report detection rate and median horizon (ms). Missed = 0.
@@ -368,7 +407,8 @@ Per run, per mode (A, V, AV), with conversation-level bootstrap CIs (clips as th
 Judge validity on human data (phase 1 and 3 report, Seamless test split, 133 speaker files):
 
 - visual-only yield-cue AUC and start-cue AUC with CIs; **gate: both ≥ 0.60 and shuffled-video ≤ 0.53**; *Met 2026-11-11 on the
-  187-conversation hold-out with visual-only GRU heads: start 0.725, yield 0.689, controls 0.48–0.52 (§1b).*
+  187-conversation hold-out with visual-only GRU heads: start 0.725, yield 0.689, controls 0.48–0.52 (§1b). The same
+  heads trained on CANDOR meet it on the CANDOR hold-out: start 0.769, yield 0.706, controls 0.50.*
 - sensitivity: time-shift the human face track by +1 s and by −1 s, replace it with a static frame — the
   visual-only AUCs must fall towards chance monotonically with the degradation;
 - improvised vs naturalistic and per-site slices (Berner et al. found domain sensitivity).
@@ -412,7 +452,9 @@ partner-face branch and measure 3b.
 Seamless conversations, laptop CPU, four window-anchored heads instead of the 10 Hz `HeadsAV` runner, chosen on dev and
 scored once on the fresh hold-out. Gate 1 met: start cue 0.725, yield cue 0.689, controls ≤ 0.53. Not built: the audio
 branch and modality dropout, the `p_start(h)` horizons as streaming heads, the sensitivity curves of §3. The oracle
-features were dropped once phase 2's extractor question was settled for MediaPipe.*
+features were dropped once phase 2's extractor question was settled for MediaPipe. The same heads were then trained on
+CANDOR (608 conversations of the protocol's exploration half) for the second human reference: start cue 0.769, yield
+cue 0.706 on the CANDOR hold-out (§1b, 'The sequence heads on CANDOR').*
 - Extend `HeadsAV`: `p_start(h)` heads (h = 0.4, 1 s) on the participant's own face, modality dropout,
   presence flags. Train on the R2 train tracks (two seeds, the R2 recipe and epoch selection on dev). The
   bid study's `scripts/r2_bids_common.py` already loads both participants' tracks and defines onsets,
