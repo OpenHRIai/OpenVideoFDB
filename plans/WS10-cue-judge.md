@@ -8,7 +8,10 @@ working days across four phases, with a kill gate after phase 1. **Status 2026-1
 and the CANDOR replication done; **phase 1 done in its visual-only form** (GRU heads on the open-extractor tracks, §1b
 last paragraph: gate 1 met on a fresh hold-out, start cue 0.725, yield cue 0.689), and the same heads trained on
 CANDOR for the second human reference (§1b, 'The sequence heads on CANDOR': start cue 0.769, yield cue 0.706); the audio
-branch and modality dropout of §2 and the 10 Hz runner of phase 2 are not built.
+branch and modality dropout of §2 and the 10 Hz runner of phase 2 are not built. **Version 2, 2026-11-14:** turn ends and pauses are now timed on the
+end of audible speech and the human references were recomputed on that clock (§1b, 'Version 2 of the human
+references'): start cue 0.724 (Seamless) and 0.769 (CANDOR), yield cue 0.658 and 0.688. Numbers elsewhere in this
+spec are version 1 (voice-activity clock) unless marked.
 **Files (this repo):** `ovfdb/score/lanes.py`, `ovfdb/score/cues.py`, `ovfdb/score/cue_judge.py`,
 `ovfdb/cli.py` (`score-cues`), `ovfdb/score/report.py` (one new table), `tests/test_cues.py`,
 `results/cues_*.md`, `docs/protocol.md` §11 (new). Training code stays in the private repo; this repo
@@ -314,6 +317,35 @@ CANDOR, CANDOR-trained 0.693 on Seamless; controls 0.49–0.52), so a judge trai
 setting, at that cost, and each setting is best scored against the reference of a head trained on it. Limits: CANDOR
 has about twenty times more events than were used, so 0.769 is not a ceiling; the between-corpus intervals are as wide
 as the 187 Seamless hold-out conversations allow.
+
+**Version 2 of the human references (2026-11-14): events timed on audible speech.** Version 1 timed a turn end or a
+pause at the end of the speaker's VAD (voice-activity detection) segment. That moment is a median 0.12 s (Seamless)
+and 0.11 s (CANDOR) after the speech one can clearly hear, so version 2 times every turn end and pause at the end of
+audible speech (the last 10 ms frame within 25 dB of the loudest frame in the 1.5 s before the VAD end, on the
+speaker's own channel; private repo `modal_audible_ends.py`, switch `CUE_CLOCK=audible` in `scripts/cue_corpus.py`).
+The sequence heads were retrained on that clock (`scripts/cue_gru_retimed.py`, `modal_gru_retimed.py`, run tag `aud`)
+and every analysis and planned test aligned on the stop was run again (plot report `docs/cue_timing.md`, section
+'Version 2'). **Use these as the human references from now on.** All values are hold-out AUC (area under the curve,
+0.5 = chance) with 95 % intervals over conversations: 187 Seamless conversations, 839 CANDOR conversations.
+
+| statistic (metric) | Seamless GRU, v1 (AUC) | Seamless GRU, v2 (AUC) | Seamless logistic, v2 (AUC) | CANDOR GRU, v1 (AUC) | CANDOR GRU, v2 (AUC) | CANDOR logistic, v2 (AUC) |
+|---|---|---|---|---|---|---|
+| start cue, 0.3 s before the first word (3; not re-timed) | 0.725 | **0.724 [0.70, 0.75]** | 0.644 | 0.769 | **0.769 [0.76, 0.78]** | 0.700 |
+| turn end vs pause, 0.3 s before the stop (1b) | 0.686 | **0.675 [0.65, 0.70]** | 0.622 | 0.669 | **0.663 [0.66, 0.67]** | 0.636 |
+| turn end vs pause, 0.3 s into the silence (2b) | 0.787 | **0.769 [0.75, 0.79]** | 0.703 | 0.761 | **0.746 [0.74, 0.75]** | 0.705 |
+| turn end vs mid-turn speech, 0.3 s before the stop (1) | 0.689 | **0.658 [0.64, 0.68]** | 0.616 | 0.706 | **0.688 [0.68, 0.69]** | 0.666 |
+
+Gate 1 still holds on both corpora (start and yield cue ≥ 0.60; controls on another conversation's face 0.49 to 0.52
+on Seamless and 0.495 to 0.500 on CANDOR, all ≤ 0.53). The start-cue gap between the corpora is unchanged (+0.045
+[+0.016, +0.074]). A head moved to the other corpus loses 0.03 to 0.04 AUC (was 0.03 to 0.05). The frozen protocol
+rerun on the audible clock: 18 of 18 primary tests confirmed on the CANDOR hold-out (as before), 16 of 16 on the
+Seamless fresh hold-out (was 14 of 16; S5 and L6 sit at their thresholds), 14 of 16 on the Seamless dev set (was 15
+of 16; S4b, head stillness before a turn end, drops out) and 14 of 16 on the train subset (as before). These sets
+had been scored once already, so this is a re-timing of confirmed results, not a second confirmation.
+**Consequence for the judge and the metrics of §3:** a horizon 'before the stop' or 'into the silence' is counted
+from the last audible sample of the speech, in line with §3 item 6, which already measures the agent's horizon
+against the first audible sample; a judge trained on VAD-timed events would place the stop about 0.1 s late. The per-event lags and the loudness track of every recording
+are saved for training (STATUS, WS10 entry of 2026-11-14).
 
 ## 2. Model
 
