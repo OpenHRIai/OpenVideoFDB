@@ -11,7 +11,10 @@ CANDOR for the second human reference (§1b, 'The sequence heads on CANDOR': sta
 branch and modality dropout of §2 and the 10 Hz runner of phase 2 are not built. **Version 2, 2026-11-14:** turn ends and pauses are now timed on the
 end of audible speech and the human references were recomputed on that clock (§1b, 'Version 2 of the human
 references'): start cue 0.724 (Seamless) and 0.769 (CANDOR), yield cue 0.658 and 0.688. Numbers elsewhere in this
-spec are version 1 (voice-activity clock) unless marked.
+spec are version 1 (voice-activity clock) unless marked. **Gaze, 2026-11-14:** the partner-gaze measure mixes head
+and eye position and cannot tell a head turn from a look away (§1b, 'What the partner-gaze measure is and is not');
+separate head, eye and gaze-on-partner inputs are planned with a labelled pilot first (§5, phase 2, 'Gaze inputs'),
+not started.
 **Files (this repo):** `ovfdb/score/lanes.py`, `ovfdb/score/cues.py`, `ovfdb/score/cue_judge.py`,
 `ovfdb/cli.py` (`score-cues`), `ovfdb/score/report.py` (one new table), `tests/test_cues.py`,
 `results/cues_*.md`, `docs/protocol.md` §11 (new). Training code stays in the private repo; this repo
@@ -171,6 +174,23 @@ low resolution is not why CANDOR's motion effects are smaller. *In the decoder (
 to the 65 features raise end-vs-pause AUC at −0.3 / 0 / +0.3 / +1.0 s from 0.560 / 0.586 / 0.681 / 0.716 to 0.605 / 0.644 / 0.726 /
 0.770 on Seamless and from 0.621 / 0.652 / 0.696 / 0.727 to 0.641 / 0.673 / 0.720 / 0.751 on CANDOR (paired CIs exclude 0). These
 supersede the earlier human reference for metrics 2 and 2b.
+
+*What the partner-gaze measure is and is not (2026-11-14, found while choosing the blog's example clip).* The four
+numbers (head yaw, head pitch, iris left–right, iris up–down) enter one distance as separate dimensions, so they are
+not a gaze direction: a head that tilts while the eyes stay on the partner leaves the cone. Seen on Seamless
+`V03_S1920_I00000213_P5375` at 81.84 s: the head about 10° from its listening centre, the eyes on the partner throughout
+(maintainer's check by eye), labelled 'away' for 2.5 s. The tracker's numbers give no way to correct for this: across
+114 Seamless test speakers with ≥ 20 s of listening, head and iris move together rather than against each other while
+listening (correlation median +0.12 left–right, +0.06 up–down; negative for only 35 % and 41 % of speakers). The 0/1
+label also flickers: on the Seamless test split (216,520 frames) 2.7 % of frames are one-sample blips, 46 % of the 25,028
+label changes belong to one, and 15.7 % of frames lie within 15 % of the cut-off distance. None of this reaches the GRU
+heads, which read the 65 continuous features, and the averages stand. Version 2, turn end minus pause in the last
+0.5 s: head + eyes +13.7 pp [+12.0, +14.9] Seamless / +13.0 [+11.9, +14.0] CANDOR; eyes only +14.0 [+12.5, +15.3] /
++13.0 [+12.0, +13.9]; head only +8.8 [+7.3, +10.1] / +9.0 [+7.8, +10.1]; a 50 % cone shrinks the combined value to
++9.1 / +9.0. Per event (Seamless test split, voice-activity clock, 387 turn ends against 1,507 pauses) the continuous
+distance separates turn ends from pauses at AUC 0.618, the 0/1 label at 0.595 (0.593 with blips removed). The level of
+the share while speaking (27.6 % / 34.9 % of frames) is set by the 70 % cone and means little on its own. The judge's
+gaze inputs are re-planned in §5, phase 2, 'Gaze inputs'.
 
 *Confirmation on unseen data (2026-11-09; private repo `scripts/cue_confirm.py`, hypotheses file §9 protocol and §10
 results).* The claims above were tested once under a protocol committed beforehand, with models fitted on the data above
@@ -512,6 +532,34 @@ cue 0.706 on the CANDOR hold-out (§1b, 'The sequence heads on CANDOR').*
   runner in `ovfdb/score/cue_judge.py`; the audio features come from the public `smart-turn-streaming`
   package (`eot.features`), so this repo adds no torch dependency.
 - Publish `OpenHRI/ovfdb-cue-judge` (CC BY-NC, model card with the phase-1/2 validity numbers).
+- **Gaze inputs (added 2026-11-14; not started).** Why: §1b, 'What the partner-gaze measure is and is not'. The judge
+  gets three gaze signals per frame in place of the four partner-gaze columns, from the same extractor on human and
+  avatar video:
+  1. *head direction*: yaw and pitch in degrees (MediaPipe head transform, already tracked);
+  2. *eye direction in the head*: in degrees, i.e. gaze direction minus head direction; today only iris position (no
+     unit) and the eight `eyeLook*` blendshapes exist;
+  3. *gaze on the partner*: angle in degrees between the gaze direction and the partner's direction. A 0/1 version only
+     where a share of frames is reported, with hysteresis (two cut-offs, so the label changes only after the angle has
+     clearly crossed the boundary, not on every frame that grazes it).
+
+  Partner direction: for an avatar, the camera (the user is behind it), no calibration; on CANDOR, the screen (near
+  the camera, usually below it), estimated per person from listening frames in gaze angles; on Seamless, off camera,
+  estimated the same way. The boundary for 'on the partner' becomes an angle (about the width of a face at the
+  seating distance) instead of the 70 % share. Inputs are relative to the partner so that they mean the same thing in
+  the training data and on avatars.
+  - *Pilot and gate G (before any re-tracking; est. 1–2 days plus labelling).* A person labels 'eyes on the partner:
+    yes / no' on about 300 frames per source (Seamless, CANDOR, the avatar runs), oversampling hard cases (head moves
+    while the eyes stay; blinks; sideways glances with a still head). Compared against the labels: (a) the current
+    head + iris label, (b) a geometric eye-in-head angle from MediaPipe's iris and eye-corner landmarks, (c) a
+    dedicated appearance-based gaze-estimation model run on face crops (candidates to be chosen; licence and accuracy
+    on these videos unchecked). Agreement as Cohen's kappa (agreement beyond chance: 0 = chance, 1 = perfect), 95 %
+    intervals over recordings, per source. **Gate G:** re-track only where (b) or (c) clearly beats (a). CANDOR's
+    320 × 240 frames leave the eyes a few pixels wide and may support head direction only; decide per corpus.
+  - *If gate G passes:* re-track all recordings (2,296 Seamless, 3,183 CANDOR) and the avatar runs on Modal; rerun the
+    gaze statistics (hypotheses S9 family) as version 3 and the GRU heads with the three inputs; report the gain over
+    the current inputs (the four partner-gaze columns add +0.02 to +0.05 AUC to the decoder, §1b).
+  - *What it buys on avatars:* the judge can then tell whether an avatar's eyes leave the camera while it talks and come
+    back before a turn end, which the current inputs cannot separate from head motion.
 
 **Phase 3 — scoring runs and the results note (2 days, this repo).**
 - `ovfdb score-cues <run> --manifest …` → `<row>/cues.json`; `report` gains a "Cue signalling" table:
