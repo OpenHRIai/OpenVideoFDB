@@ -287,6 +287,15 @@ Re-running: `ovfdb run` is resumable (skips dirs with run.json); a connection dr
   Title "Turn-taking latency" (script default `<dynamic> latency`). A frame of c02 is in the README
   (`docs/media/avatars_turn_taking_c02.png`); GitHub does not play repo-hosted mp4s inline, so the video itself is
   linked/attached separately (web-editor upload or a release asset).
+- **Redesigned 2026-11-14** (`scripts/avatar_sbs.py`, outputs `data/announcement/avatars_turn_taking_{c02,c00}_v2.mp4`,
+  1920x1216). The first version gave every pane its own speech strip on its own scale, so its marks could not line up
+  with the timeline. Now: one lane chart (user + each responder) on one time axis with one playhead, the dashed
+  "user stops" line and the labelled 1.5 s handoff window; one colour per speaker fixed by vendor (Okabe-Ito, user
+  grey) on pane frame, label and lane; latency drawn as a line from the user's stop to the first reply plus a
+  "reply after" column that counts up and freezes; responders sorted fastest first in lanes and grid; user captions
+  (2 lines max, words capped at 0.8 s against the smeared alignment); text ≥ 20 px for the blog's 960 px width; a
+  136 px bottom strip so the browser's play bar covers no data. README still: `docs/media/avatars_turn_taking_c02_v2.png`.
+  The c02 video replaces the still on openhri.ai/research/open-videofdb/ (website repo).
 
 ### Next (priority order)
 1. Tavus CVI on the 105 perception rows (paper Table 1 AV2AV row; ≈ 145 Tavus minutes) — `run_manifest(..., provider='tavus', bucket='perception')`, then `ovfdb score` (perception judge) and add to `results/nvidia_test.md`. Affect-Match offset: try adding an agent-side visual/audio caption (Gemini Flash) to the generation payload and re-judge gt.
